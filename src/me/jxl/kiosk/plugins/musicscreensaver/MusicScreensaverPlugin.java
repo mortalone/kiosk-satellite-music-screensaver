@@ -105,6 +105,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                     lastScreensaverPostpone = SystemClock.elapsedRealtime();
                     postponeKioskScreensaver();
                 }
+                notifyAudioPresentation();
             }
             main.postDelayed(this, 1000);
         }
@@ -153,6 +154,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     @Override
     public synchronized void stop() {
         main.removeCallbacksAndMessages(null);
+        notifyAudioPresentationOff();
         if (audioReceiver != null && context != null) {
             try { context.unregisterReceiver(audioReceiver); } catch (Throwable ignored) {}
             audioReceiver = null;
@@ -190,6 +192,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             visualView.configure(effect, vinylStyle, ferrofluidColor, backgroundTheme,
                     showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
         }
+        if (isOverlayActive) notifyAudioPresentation();
         publishState();
     }
 
@@ -290,6 +293,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         if (isOverlayActive) {
             Activity act = activeKioskActivity();
             if (act != null) rebuildOverlayViews(act);
+            notifyAudioPresentation();
         }
         publishState();
     }
@@ -480,6 +484,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         bringKioskToFront();
         isOverlayActive = true;
         publishState();
+        notifyAudioPresentation();
 
         Activity act = activeKioskActivity();
         if (act != null && !act.isFinishing() && (Build.VERSION.SDK_INT < 17 || !act.isDestroyed())) {
@@ -499,6 +504,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
     private void hideOverlay() {
         isOverlayActive = false;
+        notifyAudioPresentationOff();
         if (rootContainer != null) {
             try {
                 View parent = (View) rootContainer.getParent();
@@ -745,6 +751,32 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                 host.executeCommand("postponeScreensaver", Collections.emptyMap(), (ok, d, e) -> {});
             } catch (Throwable ignored) {}
         }
+    }
+
+    private void notifyAudioPresentation() {
+        if (context == null) return;
+        try {
+            boolean active = isOverlayActive && "playing".equalsIgnoreCase(playerState);
+            context.getSharedPreferences("party_mode_presentation", Context.MODE_PRIVATE).edit()
+                    .putBoolean("party_fullscreen", isOverlayActive)
+                    .putLong("party_until_ms", isOverlayActive ? System.currentTimeMillis() + 60000 : 0)
+                    .putString("effect", effect)
+                    .putInt("gain", gain)
+                    .putInt("fps", settingEconomy ? 20 : 25)
+                    .apply();
+            context.sendBroadcast(new Intent("me.jxl.kiosk.plugins.PARTY_PRESENTATION_CHANGED").setPackage(context.getPackageName()));
+        } catch (Throwable ignored) {}
+    }
+
+    private void notifyAudioPresentationOff() {
+        if (context == null) return;
+        try {
+            context.getSharedPreferences("party_mode_presentation", Context.MODE_PRIVATE).edit()
+                    .putBoolean("party_fullscreen", false)
+                    .putLong("party_until_ms", 0)
+                    .apply();
+            context.sendBroadcast(new Intent("me.jxl.kiosk.plugins.PARTY_PRESENTATION_CHANGED").setPackage(context.getPackageName()));
+        } catch (Throwable ignored) {}
     }
 
     private void registerAudioReceiver() {

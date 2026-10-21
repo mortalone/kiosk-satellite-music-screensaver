@@ -1,5 +1,19 @@
 # Release Notes — Music Screensaver
 
+## 0.1.5
+
+- **True Acoustic & Magnetic Ferrofluid Physics**:
+  - **Rosensweig Needle Cones**: Replaced circular sine wobbles with genuine magnetic normal-field instability spikes. Flanks are rendered with concave bezier curves meeting at razor-sharp needle tips along the magnetic vector.
+  - **Specular Liquid Chrome Ridge Lines**: Rendered 3D metallic wet gloss highlights running along the spine of every active spike, glistening as the cones shoot outward.
+  - **Rayleigh-Plateau Satellite Droplets**: Heavy kick drums pinch off liquid obsidian satellite beads that shoot outward with independent specular glints before snapping back under liquid surface tension.
+  - **Polar Magnetic Alignment & Center-of-Mass Surging**: Fluid leaps vertically off the baseline with kick drum impact, concentrating primary spikes at the top and bottom electromagnetic poles.
+- **Spectrum Visualizer Broadcast Bridge**:
+  - Automatically registers `party_mode_presentation` and broadcasts `me.jxl.kiosk.plugins.PARTY_PRESENTATION_CHANGED` whenever the music screensaver is active. This wakes up Kiosk Satellite's `SpectrumVisualizerPlugin`, activating live 32-band FFT audio frame streaming at 25 FPS via `PARTY_AUDIO_FRAME`.
+- **Autonomous Track-Locked Beat Synthesizer (Zero-Stall Fallback)**:
+  - If live audio frames from Sendspin are delayed or silent, an autonomous acoustic tempo engine drives kick, snare, bass groove, and hi-hats synchronized to track playback time. The ferrofluid dances dynamically to the song at all times, never stalling or sitting as a flat circle.
+- **Album Matched Color Support**:
+  - Dynamically samples the dominant color palette from album artwork for the ambient magnetic aura glow when "Album Matched" is selected.
+
 ## 0.1.4
 
 - **Fix App Crash on Button Tap (`Invalid host request`)**:
