@@ -7,6 +7,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Build;
@@ -73,6 +74,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     private double trackPosition = 0;
     private long trackPositionAnchor = 0;
     private float currentVolume = 0.5f;
+    private String activeQueueId = "";
 
     private MusicLyrics lyrics = MusicLyrics.parse("", "");
     private String lyricsTrackKey = "";
@@ -329,6 +331,11 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         Object vol = attrs.get("volume_level");
         if (vol instanceof Number) this.currentVolume = ((Number) vol).floatValue();
 
+        Object queue = attrs.get("active_queue");
+        if (queue != null && !String.valueOf(queue).trim().isEmpty()) {
+            this.activeQueueId = String.valueOf(queue).trim();
+        }
+
         Object dur = attrs.get("media_duration");
         if (dur instanceof Number) this.trackDuration = ((Number) dur).doubleValue();
 
@@ -528,12 +535,39 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                 showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
         visualView.updateTrack(trackTitle, trackArtist, currentCover, "playing".equalsIgnoreCase(playerState), estimatedPosition());
         visualView.setListener(new MusicVisualView.Listener() {
-            @Override public void onPlayPause() { callHaService("media_player", "media_play_pause"); }
-            @Override public void onNext() { callHaService("media_player", "media_next_track"); }
-            @Override public void onPrevious() { callHaService("media_player", "media_previous_track"); }
+            @Override public void onPlayPause() {
+                boolean isPlaying = "playing".equalsIgnoreCase(playerState);
+                String targetQueue = (activeQueueId != null && !activeQueueId.isEmpty()) ? activeQueueId : speakerEntity;
+                if (!targetQueue.isEmpty()) {
+                    sendMaPlayerCommand(isPlaying ? "player_queues/pause" : "player_queues/play",
+                            Collections.singletonMap("queue_id", targetQueue));
+                }
+            }
+            @Override public void onNext() {
+                String targetQueue = (activeQueueId != null && !activeQueueId.isEmpty()) ? activeQueueId : speakerEntity;
+                if (!targetQueue.isEmpty()) {
+                    sendMaPlayerCommand("player_queues/next",
+                            Collections.singletonMap("queue_id", targetQueue));
+                }
+            }
+            @Override public void onPrevious() {
+                String targetQueue = (activeQueueId != null && !activeQueueId.isEmpty()) ? activeQueueId : speakerEntity;
+                if (!targetQueue.isEmpty()) {
+                    sendMaPlayerCommand("player_queues/previous",
+                            Collections.singletonMap("queue_id", targetQueue));
+                }
+            }
             @Override public void onVolumeAdjust(int delta) {
                 float target = Math.max(0f, Math.min(1f, currentVolume + (delta / 100.0f)));
-                callHaServiceWithData("media_player", "volume_set", Collections.singletonMap("volume_level", target));
+                currentVolume = target;
+                int level = Math.round(target * 100f);
+                String targetQueue = (activeQueueId != null && !activeQueueId.isEmpty()) ? activeQueueId : speakerEntity;
+                if (!targetQueue.isEmpty()) {
+                    Map<String, Object> args = new HashMap<>();
+                    args.put("player_id", targetQueue);
+                    args.put("volume_level", level);
+                    sendMaPlayerCommand("players/cmd/group_volume", args);
+                }
             }
             @Override public void onDismiss() {
                 userDismissed = true;
@@ -541,7 +575,9 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                 dismissedTrackId = trackArtist + " - " + trackTitle;
                 hideOverlay();
                 if (host != null) {
-                    host.executeCommand("stopScreensaver", Collections.emptyMap(), (ok, d, e) -> {});
+                    try {
+                        host.executeCommand("stopScreensaver", Collections.emptyMap(), (ok, d, e) -> {});
+                    } catch (Throwable ignored) {}
                 }
             }
         });
@@ -642,35 +678,72 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                 }
             } catch (Throwable ignored) {}
         }
-        if (host != null) {
-            try {
-                host.executeCommand("bringToFront", Collections.emptyMap(), (ok, d, e) -> {});
-            } catch (Throwable ignored) {}
-        }
     }
 
     private boolean isLyricsEffect() {
         return "cotodama".equals(effect) || "hybrid_vinyl".equals(effect) || "hybrid_ferrofluid".equals(effect);
     }
 
-    private void callHaService(String domain, String service) {
-        callHaServiceWithData(domain, service, Collections.emptyMap());
+    private String readMaUrl() {
+        if (context == null) return "";
+        try {
+            SharedPreferences prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE);
+            return prefs.getString("flutter.ks.sendspin.ma_url", "").trim();
+        } catch (Throwable ignored) {
+            return "";
+        }
     }
 
-    private void callHaServiceWithData(String domain, String service, Map<String, Object> extra) {
-        if (host == null || speakerEntity.isEmpty()) return;
-        Map<String, Object> data = new HashMap<>(extra);
-        data.put("entity_id", speakerEntity);
-        Map<String, Object> args = new HashMap<>();
-        args.put("domain", domain);
-        args.put("service", service);
-        args.put("serviceData", data);
-        host.executeCommand("callHaService", args, (ok, res, err) -> {});
+    private String readMaToken() {
+        if (context == null) return "";
+        try {
+            SharedPreferences prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE);
+            return prefs.getString("flutter.ks.sendspin.ma_token", "").trim();
+        } catch (Throwable ignored) {
+            return "";
+        }
+    }
+
+    private void sendMaPlayerCommand(String command, Map<String, Object> args) {
+        if (ioPool == null || context == null) return;
+        final String base = readMaUrl().replaceFirst("^ws:", "http:").replaceFirst("^wss:", "https:").replaceAll("/+$", "");
+        final String token = readMaToken();
+        final String queue = (activeQueueId != null && !activeQueueId.isEmpty()) ? activeQueueId : speakerEntity;
+        if (base.isEmpty() || token.isEmpty() || queue.isEmpty()) return;
+
+        ioPool.execute(() -> {
+            try {
+                URL url = new URL(base + "/api");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(2500);
+                conn.setReadTimeout(3500);
+                conn.setRequestMethod("POST");
+                conn.setDoOutput(true);
+                conn.setUseCaches(false);
+                conn.setRequestProperty("Authorization", "Bearer " + token);
+                conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+
+                org.json.JSONObject request = new org.json.JSONObject();
+                request.put("message_id", "music-screensaver");
+                request.put("command", command);
+                org.json.JSONObject jsonArgs = new org.json.JSONObject(args);
+                request.put("args", jsonArgs);
+
+                byte[] body = request.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                conn.setFixedLengthStreamingMode(body.length);
+                try (java.io.OutputStream out = conn.getOutputStream()) {
+                    out.write(body);
+                }
+                conn.getResponseCode();
+            } catch (Throwable ignored) {}
+        });
     }
 
     private void postponeKioskScreensaver() {
         if (host != null) {
-            host.executeCommand("postponeScreensaver", Collections.emptyMap(), (ok, d, e) -> {});
+            try {
+                host.executeCommand("postponeScreensaver", Collections.emptyMap(), (ok, d, e) -> {});
+            } catch (Throwable ignored) {}
         }
     }
 

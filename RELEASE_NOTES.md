@@ -1,5 +1,13 @@
 # Release Notes — Music Screensaver
 
+## 0.1.4
+
+- **Fix App Crash on Button Tap (`Invalid host request`)**:
+  - Replaced unsupported `callHaService` and `bringToFront` host commands with direct Music Assistant HTTP API calls (`player_queues/play`, `player_queues/pause`, `player_queues/next`, `player_queues/previous`, `players/cmd/group_volume`).
+  - In Kiosk Satellite, passing an unhandled command string to `host.executeCommand` caused `IllegalArgumentException: Invalid host request`, terminating the Kiosk process and causing Kiosk Satellite to disable the plugin upon restart.
+  - Playback buttons (Play/Pause, Next, Previous, Volume) now directly command Music Assistant using the shared authentication token and active queue without triggering any host errors.
+  - Dismissing the overlay safely wraps `stopScreensaver` in a guarded try-catch block.
+
 ## 0.1.3
 
 - **Fixed HA Switch & Select Event Delivery (`onEvent`)**:
