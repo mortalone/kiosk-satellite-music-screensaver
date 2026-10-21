@@ -38,9 +38,11 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
     // Settings
     private String speakerEntity = "";
-    private boolean startAutomatically = true;
+    private String activationMode = "When screensaver starts";
     private boolean onlyWhilePlaying = true;
     private boolean showPaused = true;
+    private boolean kioskScreensaverActive = false;
+    private boolean manualActive = false;
     private String effect = "hybrid_vinyl";
     private String vinylStyle = "With Ambient Glow";
     private String ferrofluidColor = "Obsidian Black";
@@ -124,6 +126,18 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             }
         });
 
+        // Subscribe to Kiosk Satellite screensaver events
+        try {
+            host.subscribe("screensaver.state");
+            host.subscribe("screensaver.view");
+            host.executeCommand("isScreensaverActive", Collections.emptyMap(), (ok, data, error) -> {
+                if (ok && data instanceof Boolean) {
+                    kioskScreensaverActive = (Boolean) data;
+                    main.post(this::updatePresentation);
+                }
+            });
+        } catch (Throwable ignored) {}
+
         main.post(tickRunnable);
         publishState();
     }
@@ -147,7 +161,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     public synchronized void configure(Map<String, Object> settings) {
         if (settings == null) return;
         speakerEntity = str(settings, "speakerEntity", "");
-        startAutomatically = bool(settings, "startAutomatically", true);
+        activationMode = str(settings, "activationMode", "When screensaver starts");
         onlyWhilePlaying = bool(settings, "onlyWhilePlaying", true);
         showPaused = bool(settings, "showPaused", true);
         effect = str(settings, "effect", "hybrid_vinyl");
@@ -173,11 +187,20 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
     @Override
     public void execute(String id, Map<String, Object> arguments) {
-        if ("show".equals(id)) {
-            userDismissed = false;
-            showOverlay();
+        if ("active".equals(id) || "show".equals(id)) {
+            boolean turnOn = arguments == null || !Boolean.FALSE.equals(arguments.get("value"));
+            if (turnOn) {
+                userDismissed = false;
+                manualActive = true;
+                showOverlay();
+            } else {
+                userDismissed = true;
+                manualActive = false;
+                hideOverlay();
+            }
         } else if ("hide".equals(id)) {
             userDismissed = true;
+            manualActive = false;
             hideOverlay();
         } else if ("effectVinyl".equals(id)) {
             setEffect("vinyl");
@@ -200,6 +223,13 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
     @Override
     public void onEvent(String event, Map<String, Object> payload) {
+        if ("ks.screensaver.state".equals(event) || "screensaver.state".equals(event)) {
+            kioskScreensaverActive = Boolean.TRUE.equals(payload != null ? payload.get("active") : false);
+            if (!kioskScreensaverActive) {
+                userDismissed = false;
+            }
+            main.post(this::updatePresentation);
+        }
     }
 
     private void setEffect(String newEffect) {
@@ -368,11 +398,19 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     }
 
     private void updatePresentation() {
-        boolean shouldShow = startAutomatically && isVisibilityAllowed() && !userDismissed;
-        if (onlyWhilePlaying) {
-            boolean isPlaying = "playing".equalsIgnoreCase(playerState);
-            boolean isPaused = showPaused && "paused".equalsIgnoreCase(playerState);
-            shouldShow = shouldShow && (isPlaying || isPaused);
+        boolean isPlaying = "playing".equalsIgnoreCase(playerState);
+        boolean isPaused = showPaused && "paused".equalsIgnoreCase(playerState);
+        boolean musicEligible = onlyWhilePlaying ? (isPlaying || isPaused) : true;
+
+        boolean shouldShow = false;
+        if (!userDismissed && isVisibilityAllowed()) {
+            if ("Immediately when playing".equals(activationMode)) {
+                shouldShow = musicEligible;
+            } else if ("When screensaver starts".equals(activationMode)) {
+                shouldShow = kioskScreensaverActive && musicEligible;
+            } else if ("Manual / HA switch only".equals(activationMode)) {
+                shouldShow = manualActive;
+            }
         }
 
         if (shouldShow) {
@@ -439,8 +477,12 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             }
             @Override public void onDismiss() {
                 userDismissed = true;
+                manualActive = false;
                 dismissedTrackId = trackArtist + " - " + trackTitle;
                 hideOverlay();
+                if (host != null) {
+                    host.executeCommand("stopScreensaver", Collections.emptyMap(), (ok, d, e) -> {});
+                }
             }
         });
 

@@ -1,5 +1,14 @@
 # Release Notes — Music Screensaver
 
+## 0.1.1
+
+- Add **`activationMode`** setting with 3 distinct options:
+  - `When screensaver starts`: Acts as a true screensaver. Waits for Kiosk Satellite's native screensaver idle timeout or manual screensaver button. Activates only when music is playing, seamlessly overruling Fotoo/Nature Frame.
+  - `Immediately when playing`: Activates as an instant music overlay as soon as music playback starts.
+  - `Manual / HA switch only`: Only activates when turned on manually or via Home Assistant entity.
+- Subscribe to Kiosk Satellite `screensaver.state` and `screensaver.view` events and query initial `isScreensaverActive`.
+- Tapping on the background canvas dismisses the screensaver and commands Kiosk Satellite to stop the screensaver, immediately returning to the Lovelace dashboard.
+
 ## 0.1.0
 
 - Initial release of **Music Screensaver** for Kiosk Satellite.
