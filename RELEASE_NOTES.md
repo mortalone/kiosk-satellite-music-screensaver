@@ -1,5 +1,18 @@
 # Release Notes — Music Screensaver
 
+## 0.1.2
+
+- **Direct Bidirectional HA Switch Control**:
+  - Flipping `switch.raspberry_raspberry_pi_4_music_screensaver_aktiv` to `on` now immediately forces the music screensaver to show and stay on, regardless of `activationMode` or playback status.
+  - Tapping anywhere on the background canvas dismisses the screensaver and instantly switches the HA switch back to `off`.
+  - When the screensaver activates automatically during playback, the switch turns `on` to reflect live status; when playback stops or screensaver exits, it turns `off`.
+- **Robust Activity Discovery & Foreground Bring-To-Front**:
+  - Resolved `ActivityThread.mActivities` reflection fallback so Kiosk Satellite's Activity is never missed even if the plugin started while the app was already running.
+  - Automatically brings Kiosk Satellite to the foreground via Intent reorder when activating or forcing the screensaver on.
+  - Removed premature `stopScreensaver` invocation from periodic postpone loop, ensuring screensaver state remains stable.
+- **Clean Entity Naming**:
+  - Published switch and select titles now avoid duplicate plugin prefixes, creating clean entities `Music Screensaver: Aktiv` and `Music Screensaver: Visualisering`.
+
 ## 0.1.1
 
 - Add **`activationMode`** setting with 3 distinct options:

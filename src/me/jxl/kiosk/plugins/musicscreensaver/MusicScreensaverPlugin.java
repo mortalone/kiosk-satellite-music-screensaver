@@ -19,6 +19,7 @@ import android.view.View;
 import android.widget.FrameLayout;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -113,6 +114,11 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         this.context = resolveContext(host);
         this.ioPool = Executors.newFixedThreadPool(3);
 
+        Activity current = findResumedActivity();
+        if (current != null) {
+            activeActivity = new WeakReference<>(current);
+        }
+
         configure(settings);
         registerLifecycle();
         registerAudioReceiver();
@@ -192,6 +198,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             if (turnOn) {
                 userDismissed = false;
                 manualActive = true;
+                bringKioskToFront();
                 showOverlay();
             } else {
                 userDismissed = true;
@@ -227,6 +234,11 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             kioskScreensaverActive = Boolean.TRUE.equals(payload != null ? payload.get("active") : false);
             if (!kioskScreensaverActive) {
                 userDismissed = false;
+                if (!manualActive && isOverlayActive) {
+                    hideOverlay();
+                }
+            } else {
+                userDismissed = false;
             }
             main.post(this::updatePresentation);
         }
@@ -239,8 +251,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                     showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
         }
         if (isOverlayActive) {
-            // Rebuild view layout for effect change (e.g. split vs full)
-            rebuildOverlayViews();
+            Activity act = activeKioskActivity();
+            if (act != null) rebuildOverlayViews(act);
         }
         publishState();
     }
@@ -248,9 +260,9 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     private void publishState() {
         if (host == null) return;
         try {
-            host.publishSelect("effect", "Music Screensaver: Visualisering",
+            host.publishSelect("effect", "Visualisering",
                     new String[]{"hybrid_vinyl", "hybrid_ferrofluid", "vinyl", "ferrofluid", "cotodama"}, effect);
-            host.publishSwitch("active", "Music Screensaver: Aktiv", isOverlayActive);
+            host.publishSwitch("active", "Aktiv", isOverlayActive);
         } catch (Throwable ignored) {}
     }
 
@@ -403,13 +415,15 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         boolean musicEligible = onlyWhilePlaying ? (isPlaying || isPaused) : true;
 
         boolean shouldShow = false;
-        if (!userDismissed && isVisibilityAllowed()) {
+        if (manualActive) {
+            shouldShow = true;
+        } else if (!userDismissed && isVisibilityAllowed()) {
             if ("Immediately when playing".equals(activationMode)) {
                 shouldShow = musicEligible;
             } else if ("When screensaver starts".equals(activationMode)) {
                 shouldShow = kioskScreensaverActive && musicEligible;
             } else if ("Manual / HA switch only".equals(activationMode)) {
-                shouldShow = manualActive;
+                shouldShow = false;
             }
         }
 
@@ -421,12 +435,24 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     }
 
     private void showOverlay() {
-        Activity act = activeActivity.get();
-        if (act == null || act.isFinishing() || act.isDestroyed()) return;
+        bringKioskToFront();
         isOverlayActive = true;
-        rebuildOverlayViews();
-        postponeKioskScreensaver();
         publishState();
+
+        Activity act = activeKioskActivity();
+        if (act != null && !act.isFinishing() && (Build.VERSION.SDK_INT < 17 || !act.isDestroyed())) {
+            rebuildOverlayViews(act);
+            postponeKioskScreensaver();
+        } else {
+            // Activity might still be transitioning to foreground; retry in 300ms
+            main.postDelayed(() -> {
+                Activity retry = activeKioskActivity();
+                if (retry != null && !retry.isFinishing()) {
+                    rebuildOverlayViews(retry);
+                    postponeKioskScreensaver();
+                }
+            }, 300);
+        }
     }
 
     private void hideOverlay() {
@@ -445,9 +471,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         publishState();
     }
 
-    private void rebuildOverlayViews() {
-        Activity act = activeActivity.get();
-        if (act == null || act.isFinishing() || act.isDestroyed()) return;
+    private void rebuildOverlayViews(Activity act) {
+        if (act == null || act.isFinishing() || (Build.VERSION.SDK_INT >= 17 && act.isDestroyed())) return;
 
         View content = act.findViewById(android.R.id.content);
         if (!(content instanceof FrameLayout)) return;
@@ -506,6 +531,89 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         rootContainer.bringToFront();
     }
 
+    private Activity activeKioskActivity() {
+        Activity a = activeActivity.get();
+        if (a != null && !a.isFinishing() && (Build.VERSION.SDK_INT < 17 || !a.isDestroyed())) {
+            return a;
+        }
+        Activity found = findResumedActivity();
+        if (found != null) {
+            activeActivity = new WeakReference<>(found);
+        }
+        return found;
+    }
+
+    private Activity findResumedActivity() {
+        try {
+            Class<?> threadClass = Class.forName("android.app.ActivityThread");
+            Method currentThread = threadClass.getDeclaredMethod("currentActivityThread");
+            currentThread.setAccessible(true);
+            Object thread = currentThread.invoke(null);
+            if (thread == null) return null;
+
+            Field activitiesField = threadClass.getDeclaredField("mActivities");
+            activitiesField.setAccessible(true);
+            Object activitiesObject = activitiesField.get(thread);
+            if (!(activitiesObject instanceof Map)) return null;
+
+            String pkg = context != null ? context.getPackageName() : null;
+            Activity fallback = null;
+            for (Object record : ((Map<?, ?>) activitiesObject).values()) {
+                if (record == null) continue;
+                Class<?> recordClass = record.getClass();
+
+                Field activityField = recordClass.getDeclaredField("activity");
+                activityField.setAccessible(true);
+                Object activityValue = activityField.get(record);
+                if (!(activityValue instanceof Activity)) continue;
+                Activity activity = (Activity) activityValue;
+                if ((pkg != null && !activity.getPackageName().equals(pkg)) ||
+                        activity.isFinishing() ||
+                        (Build.VERSION.SDK_INT >= 17 && activity.isDestroyed())) {
+                    continue;
+                }
+
+                if (activity.hasWindowFocus()) return activity;
+
+                boolean paused = false;
+                boolean stopped = false;
+                try {
+                    Field pausedField = recordClass.getDeclaredField("paused");
+                    pausedField.setAccessible(true);
+                    paused = pausedField.getBoolean(record);
+                } catch (Throwable ignored) {}
+                try {
+                    Field stoppedField = recordClass.getDeclaredField("stopped");
+                    stoppedField.setAccessible(true);
+                    stopped = stoppedField.getBoolean(record);
+                } catch (Throwable ignored) {}
+
+                if (!paused && !stopped) return activity;
+                if (!stopped && fallback == null) fallback = activity;
+            }
+            return fallback;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private void bringKioskToFront() {
+        if (context != null) {
+            try {
+                Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+                if (launch != null) {
+                    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    context.startActivity(launch);
+                }
+            } catch (Throwable ignored) {}
+        }
+        if (host != null) {
+            try {
+                host.executeCommand("bringToFront", Collections.emptyMap(), (ok, d, e) -> {});
+            } catch (Throwable ignored) {}
+        }
+    }
+
     private boolean isLyricsEffect() {
         return "cotodama".equals(effect) || "hybrid_vinyl".equals(effect) || "hybrid_ferrofluid".equals(effect);
     }
@@ -528,7 +636,6 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     private void postponeKioskScreensaver() {
         if (host != null) {
             host.executeCommand("postponeScreensaver", Collections.emptyMap(), (ok, d, e) -> {});
-            host.executeCommand("stopScreensaver", Collections.emptyMap(), (ok, d, e) -> {});
         }
     }
 
@@ -551,7 +658,10 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             ((Application) context).registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
                 @Override public void onActivityResumed(Activity activity) {
                     activeActivity = new WeakReference<>(activity);
-                    if (isOverlayActive) showOverlay();
+                    if (isOverlayActive || manualActive) {
+                        rebuildOverlayViews(activity);
+                        postponeKioskScreensaver();
+                    }
                 }
                 @Override public void onActivityPaused(Activity activity) {}
                 @Override public void onActivityStarted(Activity activity) {}
