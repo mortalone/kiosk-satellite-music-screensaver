@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Build;
@@ -15,15 +16,20 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,6 +37,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import me.jxl.kiosk.plugins.KioskPlugin;
 import me.jxl.kiosk.plugins.PluginHost;
+import org.json.JSONObject;
 
 public final class MusicScreensaverPlugin implements KioskPlugin {
     private PluginHost host;
@@ -50,7 +57,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     private String ferrofluidColor = "Obsidian Black";
     private String backgroundTheme = "Album Tinted";
     private boolean showPlaybackControls = true;
-    private String volumeControls = "Buttons";
+    private String volumeControls = "Slider";
     private boolean tapDismiss = true;
     private int gain = 3;
     private boolean settingEconomy = false;
@@ -126,7 +133,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         registerLifecycle();
         registerAudioReceiver();
 
-        // Retrieve HA base URL from Kiosk host
+        // Retrieve HA base URL from Kiosk host or FlutterSharedPreferences
         host.executeCommand("getDashboardState", Collections.emptyMap(), (ok, data, error) -> {
             if (ok && data instanceof Map) {
                 Object url = ((Map<?, ?>) data).get("haBaseUrl");
@@ -179,7 +186,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         ferrofluidColor = str(settings, "ferrofluidColor", "Obsidian Black");
         backgroundTheme = str(settings, "backgroundTheme", "Album Tinted");
         showPlaybackControls = bool(settings, "showPlaybackControls", true);
-        volumeControls = str(settings, "volumeControls", "Buttons");
+        volumeControls = str(settings, "volumeControls", "Slider");
         tapDismiss = bool(settings, "tapDismiss", true);
         gain = num(settings, "gain", 3);
         settingEconomy = str(settings, "refreshRate", "25 FPS Normal").contains("Eco");
@@ -191,6 +198,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         if (visualView != null) {
             visualView.configure(effect, vinylStyle, ferrofluidColor, backgroundTheme,
                     showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
+            visualView.setVolumeLevel(currentVolume);
         }
         if (isOverlayActive) notifyAudioPresentation();
         publishState();
@@ -228,7 +236,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             showPlaybackControls = !showPlaybackControls;
             if (visualView != null) visualView.configure(effect, vinylStyle, ferrofluidColor, backgroundTheme, showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
         } else if ("toggleVolume".equals(id)) {
-            volumeControls = "Off".equals(volumeControls) ? "Buttons" : "Off";
+            volumeControls = "Off".equals(volumeControls) ? "Slider" : "Off";
             if (visualView != null) visualView.configure(effect, vinylStyle, ferrofluidColor, backgroundTheme, showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
         }
     }
@@ -333,7 +341,10 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         }
 
         Object vol = attrs.get("volume_level");
-        if (vol instanceof Number) this.currentVolume = ((Number) vol).floatValue();
+        if (vol instanceof Number) {
+            this.currentVolume = ((Number) vol).floatValue();
+            if (visualView != null) visualView.setVolumeLevel(currentVolume);
+        }
 
         Object queue = attrs.get("active_queue");
         if (queue != null && !String.valueOf(queue).trim().isEmpty()) {
@@ -351,7 +362,6 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
         String trackKey = artist + " - " + title;
         if (!trackKey.equals(dismissedTrackId)) {
-            // New track started: reset user dismiss flag
             userDismissed = false;
         }
 
@@ -368,31 +378,120 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         if (visualView != null) {
             visualView.updateTrack(trackTitle, trackArtist, currentCover, isPlaying, estimatedPosition());
         }
+        if (lyricsView != null) {
+            lyricsView.setTrackInfo(trackTitle, trackArtist);
+        }
 
         // Fetch lyrics if track changed
-        if (!trackKey.equals(lyricsTrackKey)) {
+        if (!trackKey.equals(lyricsTrackKey) && (!title.isEmpty() || !artist.isEmpty())) {
             lyricsTrackKey = trackKey;
-            fetchLyrics(attrs);
+            fetchLyrics(attrs, artist, title, album, trackDuration);
         }
     }
 
-    private void fetchLyrics(Map<?, ?> attrs) {
+    private void fetchLyrics(Map<?, ?> attrs, String artist, String title, String album, double duration) {
         if (ioPool == null || lyricsPending) return;
         lyricsPending = true;
         ioPool.execute(() -> {
             MusicLyrics parsed = null;
-            Object lrcAttr = attrs.get("lyrics");
-            if (lrcAttr instanceof String) {
-                parsed = MusicLyrics.parse((String) lrcAttr, "");
+            // 1. Check local entity attributes
+            String[] keys = {"lyrics", "lrc", "song_lyrics", "media_lyrics"};
+            for (String k : keys) {
+                Object val = attrs.get(k);
+                if (val instanceof String && !((String) val).trim().isEmpty()) {
+                    parsed = MusicLyrics.parse((String) val, "");
+                    if (!parsed.lines.isEmpty()) break;
+                }
             }
+
+            // 2. Query open synchronized lyrics database (lrclib.net)
+            if ((parsed == null || parsed.lines.isEmpty()) && !title.isEmpty() && !artist.isEmpty()) {
+                try {
+                    String query = "https://lrclib.net/api/get?artist_name=" + URLEncoder.encode(artist, "UTF-8")
+                            + "&track_name=" + URLEncoder.encode(title, "UTF-8");
+                    if (duration > 15) {
+                        query += "&duration=" + Math.round(duration);
+                    }
+                    URL url = new URL(query);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
+                    conn.setRequestProperty("User-Agent", "KioskSatellite-MusicScreensaver/0.1.6");
+                    if (conn.getResponseCode() == 200) {
+                        try (InputStream in = conn.getInputStream();
+                             ByteArrayOutputStream bout = new ByteArrayOutputStream()) {
+                            byte[] buf = new byte[4096];
+                            int r;
+                            while ((r = in.read(buf)) != -1) bout.write(buf, 0, r);
+                            String jsonStr = bout.toString("UTF-8");
+                            JSONObject obj = new JSONObject(jsonStr);
+                            String synced = obj.optString("syncedLyrics", "");
+                            String plain = obj.optString("plainLyrics", "");
+                            if (!synced.isEmpty() || !plain.isEmpty()) {
+                                parsed = MusicLyrics.parse(synced, plain);
+                            }
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
+
             final MusicLyrics finalLyrics = (parsed != null && !parsed.lines.isEmpty())
                     ? parsed : MusicLyrics.parse("", "");
             main.post(() -> {
                 lyricsPending = false;
                 lyrics = finalLyrics;
-                if (lyricsView != null) lyricsView.setLyrics(lyrics);
+                if (lyricsView != null) {
+                    lyricsView.setLyrics(lyrics);
+                    lyricsView.setTrackInfo(trackTitle, trackArtist);
+                }
             });
         });
+    }
+
+    private String resolveHaBaseUrl() {
+        if (haBaseUrl != null && !haBaseUrl.isEmpty()) return haBaseUrl;
+        if (context != null) {
+            try {
+                SharedPreferences prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE);
+                for (Map.Entry<String, ?> entry : prefs.getAll().entrySet()) {
+                    String k = entry.getKey().toLowerCase();
+                    Object v = entry.getValue();
+                    if (v instanceof String) {
+                        String s = ((String) v).trim();
+                        if ((s.startsWith("http://") || s.startsWith("https://")) &&
+                                (k.contains("ha") || k.contains("url") || k.contains("server") || k.contains("host") || k.contains("home_assistant"))) {
+                            haBaseUrl = s.replaceAll("/+$", "");
+                            return haBaseUrl;
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+        String maUrl = readMaUrl();
+        if (!maUrl.isEmpty()) {
+            try {
+                URL u = new URL(maUrl.replaceFirst("^ws:", "http:").replaceFirst("^wss:", "https:"));
+                return u.getProtocol() + "://" + u.getHost() + ":8123";
+            } catch (Throwable ignored) {}
+        }
+        return "";
+    }
+
+    private String resolveHaToken() {
+        if (context == null) return "";
+        try {
+            SharedPreferences prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE);
+            for (Map.Entry<String, ?> entry : prefs.getAll().entrySet()) {
+                String k = entry.getKey().toLowerCase();
+                if (k.contains("token") || k.contains("auth")) {
+                    Object v = entry.getValue();
+                    if (v instanceof String && ((String) v).length() > 20) {
+                        return ((String) v).trim();
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+        return readMaToken();
     }
 
     private void loadArtwork(String urlStr) {
@@ -405,13 +504,21 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             Bitmap bmp = null;
             try {
                 String fullUrl = urlStr;
-                if (urlStr.startsWith("/") && !haBaseUrl.isEmpty()) {
-                    fullUrl = haBaseUrl.replaceAll("/+$", "") + urlStr;
+                if (urlStr.startsWith("/")) {
+                    String base = resolveHaBaseUrl();
+                    if (!base.isEmpty()) {
+                        fullUrl = base.replaceAll("/+$", "") + urlStr;
+                    }
                 }
                 HttpURLConnection conn = (HttpURLConnection) new URL(fullUrl).openConnection();
                 conn.setConnectTimeout(8000);
                 conn.setReadTimeout(8000);
                 conn.setInstanceFollowRedirects(true);
+                conn.setRequestProperty("User-Agent", "KioskSatellite-MusicScreensaver/0.1.6");
+                String token = resolveHaToken();
+                if (!token.isEmpty()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + token);
+                }
                 try (InputStream in = conn.getInputStream()) {
                     bmp = BitmapFactory.decodeStream(in);
                 }
@@ -452,7 +559,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         } else if ("State not equals".equals(visibilityCondition)) {
             return !visibilityState.equalsIgnoreCase(visibilityValue);
         }
-        return true; // Always
+        return true;
     }
 
     private void updatePresentation() {
@@ -491,7 +598,6 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             rebuildOverlayViews(act);
             postponeKioskScreensaver();
         } else {
-            // Activity might still be transitioning to foreground; retry in 300ms
             main.postDelayed(() -> {
                 Activity retry = activeKioskActivity();
                 if (retry != null && !retry.isFinishing()) {
@@ -532,13 +638,16 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         rootContainer = new FrameLayout(act);
         rootContainer.setBackgroundColor(0xFF0D1014);
 
-        boolean isSplit = "hybrid_vinyl".equals(effect) || "hybrid_ferrofluid".equals(effect);
+        DisplayMetrics dm = act.getResources().getDisplayMetrics();
+        boolean isPortrait = dm.heightPixels >= dm.widthPixels;
+        boolean isSplit = !isPortrait && ("hybrid_vinyl".equals(effect) || "hybrid_ferrofluid".equals(effect));
         boolean hasLyrics = isLyricsEffect();
 
-        // 1. Visualizer View (Full or Left Stage)
+        // 1. Visualizer View
         visualView = new MusicVisualView(act);
         visualView.configure(effect, vinylStyle, ferrofluidColor, backgroundTheme,
                 showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
+        visualView.setVolumeLevel(currentVolume);
         visualView.updateTrack(trackTitle, trackArtist, currentCover, "playing".equalsIgnoreCase(playerState), estimatedPosition());
         visualView.setListener(new MusicVisualView.Listener() {
             @Override public void onPlayPause() {
@@ -565,8 +674,12 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             }
             @Override public void onVolumeAdjust(int delta) {
                 float target = Math.max(0f, Math.min(1f, currentVolume + (delta / 100.0f)));
-                currentVolume = target;
-                int level = Math.round(target * 100f);
+                onVolumeSet(target);
+            }
+            @Override public void onVolumeSet(float fraction) {
+                currentVolume = Math.max(0f, Math.min(1f, fraction));
+                if (visualView != null) visualView.setVolumeLevel(currentVolume);
+                int level = Math.round(currentVolume * 100f);
                 String targetQueue = (activeQueueId != null && !activeQueueId.isEmpty()) ? activeQueueId : speakerEntity;
                 if (!targetQueue.isEmpty()) {
                     Map<String, Object> args = new HashMap<>();
@@ -590,15 +703,24 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
         rootContainer.addView(visualView, new FrameLayout.LayoutParams(-1, -1));
 
-        // 2. Lyrics View (Right Stage in Split, or Full Screen in Cotodama)
+        // 2. Lyrics View
         if (hasLyrics) {
             lyricsView = new MusicLyricsView(act, isSplit);
             lyricsView.setLyrics(lyrics);
+            lyricsView.setTrackInfo(trackTitle, trackArtist);
+
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-1, -1);
             if (isSplit) {
-                int screenW = act.getResources().getDisplayMetrics().widthPixels;
-                lp.width = (int) (screenW * 0.58f);
+                lp.width = (int) (dm.widthPixels * 0.56f);
                 lp.gravity = Gravity.RIGHT | Gravity.TOP;
+            } else if ("cotodama".equals(effect)) {
+                lp.gravity = Gravity.FILL;
+                lp.bottomMargin = MusicUi.dp(act, 100);
+            } else if (isPortrait) {
+                // In portrait hybrid mode: place lyrics beneath visualizer disc above controls
+                lp.topMargin = (int) (dm.heightPixels * 0.52f);
+                lp.bottomMargin = (int) (dm.heightPixels * 0.22f);
+                lp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.TOP;
             }
             rootContainer.addView(lyricsView, lp);
         }
@@ -729,15 +851,15 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                 conn.setRequestProperty("Authorization", "Bearer " + token);
                 conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
 
-                org.json.JSONObject request = new org.json.JSONObject();
+                JSONObject request = new JSONObject();
                 request.put("message_id", "music-screensaver");
                 request.put("command", command);
-                org.json.JSONObject jsonArgs = new org.json.JSONObject(args);
+                JSONObject jsonArgs = new JSONObject(args);
                 request.put("args", jsonArgs);
 
-                byte[] body = request.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                byte[] body = request.toString().getBytes(StandardCharsets.UTF_8);
                 conn.setFixedLengthStreamingMode(body.length);
-                try (java.io.OutputStream out = conn.getOutputStream()) {
+                try (OutputStream out = conn.getOutputStream()) {
                     out.write(body);
                 }
                 conn.getResponseCode();
@@ -756,7 +878,6 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     private void notifyAudioPresentation() {
         if (context == null) return;
         try {
-            boolean active = isOverlayActive && "playing".equalsIgnoreCase(playerState);
             context.getSharedPreferences("party_mode_presentation", Context.MODE_PRIVATE).edit()
                     .putBoolean("party_fullscreen", isOverlayActive)
                     .putLong("party_until_ms", isOverlayActive ? System.currentTimeMillis() + 60000 : 0)

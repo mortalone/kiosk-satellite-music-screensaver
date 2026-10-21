@@ -19,6 +19,7 @@ final class MusicLyricsView extends ScrollView {
     private final boolean split;
     private long lastPulse;
     private int windowStart;
+    private String currentTrack = "";
 
     MusicLyricsView(Context context, boolean split) {
         super(context);
@@ -28,10 +29,18 @@ final class MusicLyricsView extends ScrollView {
         setVerticalScrollBarEnabled(false);
         rows = new LinearLayout(context);
         rows.setOrientation(LinearLayout.VERTICAL);
-        int leftPad = split ? MusicUi.dp(context, 16) : MusicUi.dp(context, 32);
-        rows.setPadding(leftPad, MusicUi.dp(context, 90), MusicUi.dp(context, 24), MusicUi.dp(context, 100));
+        int leftPad = split ? MusicUi.dp(context, 20) : MusicUi.dp(context, 32);
+        int rightPad = split ? MusicUi.dp(context, 20) : MusicUi.dp(context, 32);
+        rows.setPadding(leftPad, MusicUi.dp(context, 80), rightPad, MusicUi.dp(context, 120));
         addView(rows, new ScrollView.LayoutParams(-1, -2));
         setContentDescription("Sangtekst");
+    }
+
+    void setTrackInfo(String title, String artist) {
+        this.currentTrack = (artist != null && !artist.isEmpty()) ? (artist + " – " + title) : (title != null ? title : "");
+        if (lyrics.lines.isEmpty()) {
+            rebuild();
+        }
     }
 
     void setLyrics(MusicLyrics value) {
@@ -44,20 +53,31 @@ final class MusicLyricsView extends ScrollView {
         rows.removeAllViews();
         labels.clear();
         if (lyrics.lines.isEmpty()) {
-            TextView empty = MusicUi.text(getContext(), "♪ Lytter...", split ? 24 : 26, MusicUi.MUTED);
+            TextView icon = MusicUi.text(getContext(), "♪", split ? 38 : 44, MusicUi.ACCENT);
+            icon.setGravity(split ? Gravity.START : Gravity.CENTER);
+            icon.setPadding(0, MusicUi.dp(getContext(), 40), 0, MusicUi.dp(getContext(), 12));
+            rows.addView(icon);
+
+            String status = currentTrack.isEmpty() ? "Lytter efter sangtekst..." : ("Spiller: " + currentTrack);
+            TextView empty = MusicUi.text(getContext(), status, split ? 20 : 22, MusicUi.INK);
             empty.setGravity(split ? Gravity.START : Gravity.CENTER);
             rows.addView(empty);
+
+            TextView hint = MusicUi.text(getContext(), "Synkroniserede tekster vises automatisk n\u00e5r de er tilg\u00e6ngelige", split ? 14 : 15, MusicUi.MUTED);
+            hint.setGravity(split ? Gravity.START : Gravity.CENTER);
+            hint.setPadding(0, MusicUi.dp(getContext(), 8), 0, 0);
+            rows.addView(hint);
             return;
         }
         windowStart = 0;
-        int end = Math.min(lyrics.lines.size(), 300);
+        int end = Math.min(lyrics.lines.size(), 500);
         for (int i = 0; i < end; i++) {
             String text = lyrics.lines.get(i).text;
-            TextView t = MusicUi.text(getContext(), text.isEmpty() ? "♪" : text, split ? 28 : 32,
+            TextView t = MusicUi.text(getContext(), text.isEmpty() ? "♪" : text, split ? 24 : 28,
                     lyrics.synced ? MusicUi.MUTED : MusicUi.INK);
             t.setGravity(split ? Gravity.START : Gravity.CENTER);
-            t.setAlpha(lyrics.synced ? 0.45f : 0.95f);
-            t.setPadding(0, MusicUi.dp(getContext(), split ? 12 : 14), 0, MusicUi.dp(getContext(), split ? 12 : 14));
+            t.setAlpha(lyrics.synced ? 0.35f : 0.95f);
+            t.setPadding(0, MusicUi.dp(getContext(), split ? 10 : 12), 0, MusicUi.dp(getContext(), split ? 10 : 12));
             rows.addView(t);
             labels.add(t);
         }
@@ -71,10 +91,10 @@ final class MusicLyricsView extends ScrollView {
         for (int i = 0; i < labels.size(); i++) {
             boolean active = (i + windowStart) == next;
             TextView t = labels.get(i);
-            t.setAlpha(active ? 1.0f : 0.40f);
+            t.setAlpha(active ? 1.0f : 0.35f);
             t.setScaleX(1.0f);
             t.setScaleY(1.0f);
-            t.setShadowLayer(active ? 12f : 0f, 0, 0, 0x8865E5CF);
+            t.setShadowLayer(active ? 14f : 0f, 0, 0, 0x9965E5CF);
             t.setTextColor(active ? MusicUi.ACCENT : MusicUi.MUTED);
             t.setTypeface(active ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
         }
@@ -98,9 +118,9 @@ final class MusicLyricsView extends ScrollView {
         }
         energy = count == 0 ? 0 : energy / count;
         TextView active = labels.get(selected - windowStart);
-        float scale = 1.0f + 0.08f * energy;
+        float scale = 1.0f + 0.06f * energy;
         active.setScaleX(scale);
         active.setScaleY(scale);
-        active.setShadowLayer(4f + 16f * energy, 0, 0, 0xAA65E5CF);
+        active.setShadowLayer(4f + 14f * energy, 0, 0, 0xBB65E5CF);
     }
 }

@@ -4,6 +4,7 @@ package me.jxl.kiosk.plugins.musicscreensaver;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RadialGradient;
@@ -20,12 +21,14 @@ final class MusicVisualView extends View {
         void onNext();
         void onPrevious();
         void onVolumeAdjust(int delta);
+        void onVolumeSet(float fraction);
         void onDismiss();
     }
 
-    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final Path path = new Path();
     private final RectF rect = new RectF();
+    private final RectF shadowRect = new RectF();
 
     private Listener listener;
     private String effect = "hybrid_vinyl";
@@ -33,7 +36,7 @@ final class MusicVisualView extends View {
     private String ferrofluidColor = "Obsidian Black";
     private String backgroundTheme = "Album Tinted";
     private boolean showControls = true;
-    private String volumeControls = "Buttons";
+    private String volumeControls = "Slider";
     private boolean tapDismiss = true;
     private boolean economy = false;
     private int gain = 3;
@@ -43,29 +46,42 @@ final class MusicVisualView extends View {
     private String trackArtist = "";
     private Bitmap coverArt;
     private Bitmap blurredBg;
+    private int dominantColor = 0xFF1A212D;
     private double positionSeconds = 0;
     private long anchorTime = 0;
 
     private final float[] levels = new float[32];
     private final float[] smoothedLevels = new float[32];
     private long lastAudioFrameAt = 0;
-    private float bassEnergy = 0;
     private float smoothedBass = 0;
     private float smoothedMid = 0;
     private float smoothedTreble = 0;
     private long lastPhysicsTime = 0;
 
-    // Hit rects for touch
+    // Fluid dynamics state for organic ferrofluid
+    private static final int NUM_LOBES = 6;
+    private final float[] lobeRadius = new float[NUM_LOBES];
+    private final float[] lobeTarget = new float[NUM_LOBES];
+    private float fluidRotation = 0f;
+
+    // Interactive hit rects
     private final RectF prevRect = new RectF();
     private final RectF playRect = new RectF();
     private final RectF nextRect = new RectF();
     private final RectF volMinusRect = new RectF();
     private final RectF volPlusRect = new RectF();
+    private final RectF sliderTrackRect = new RectF();
+    private boolean draggingSlider = false;
+    private float currentVolume = 0.5f;
 
     MusicVisualView(Context context) {
         super(context);
         setFocusable(true);
         setClickable(true);
+        for (int i = 0; i < NUM_LOBES; i++) {
+            lobeRadius[i] = 1.0f;
+            lobeTarget[i] = 1.0f;
+        }
     }
 
     void setListener(Listener listener) {
@@ -86,6 +102,11 @@ final class MusicVisualView extends View {
         invalidate();
     }
 
+    void setVolumeLevel(float volume) {
+        this.currentVolume = Math.max(0f, Math.min(1f, volume));
+        invalidate();
+    }
+
     void updateTrack(String title, String artist, Bitmap cover, boolean isPlaying, double position) {
         this.trackTitle = title == null ? "" : title;
         this.trackArtist = artist == null ? "" : artist;
@@ -95,32 +116,40 @@ final class MusicVisualView extends View {
 
         if (cover != this.coverArt) {
             this.coverArt = cover;
-            generateBlurredBackground(cover);
+            extractPalette(cover);
         }
         invalidate();
     }
 
-    private void generateBlurredBackground(Bitmap src) {
+    private void extractPalette(Bitmap src) {
         if (src == null || src.isRecycled()) {
+            dominantColor = 0xFF181F28;
             blurredBg = null;
             return;
         }
         try {
-            // Low-res sampled bitmap for ultra-fast GPU ambient blur
-            blurredBg = Bitmap.createScaledBitmap(src, 24, 24, true);
+            blurredBg = Bitmap.createScaledBitmap(src, 32, 32, true);
+            float maxSat = -1f;
+            int bestColor = 0xFF181F28;
+            int w = blurredBg.getWidth(), h = blurredBg.getHeight();
+            float[] hsv = new float[3];
+            for (int y = 0; y < h; y += 2) {
+                for (int x = 0; x < w; x += 2) {
+                    int p = blurredBg.getPixel(x, y);
+                    int r = (p >> 16) & 0xFF, g = (p >> 8) & 0xFF, b = p & 0xFF;
+                    Color.RGBToColor(r, g, b, hsv);
+                    if (hsv[2] > 0.12f && hsv[2] < 0.95f && hsv[1] > maxSat) {
+                        maxSat = hsv[1];
+                        hsv[2] = Math.max(0.20f, Math.min(0.38f, hsv[2]));
+                        hsv[1] = Math.max(0.40f, Math.min(0.85f, hsv[1]));
+                        bestColor = Color.HSVToColor(hsv);
+                    }
+                }
+            }
+            dominantColor = bestColor;
         } catch (Throwable ignored) {
-            blurredBg = null;
+            dominantColor = 0xFF181F28;
         }
-    }
-
-    private int extractDominantColor() {
-        if (blurredBg != null && !blurredBg.isRecycled()) {
-            try {
-                int pixel = blurredBg.getPixel(blurredBg.getWidth() / 2, blurredBg.getHeight() / 2);
-                if (pixel != 0) return pixel;
-            } catch (Throwable ignored) {}
-        }
-        return 0xFF00E5FF;
     }
 
     void acceptAudio(float[] bands) {
@@ -144,15 +173,14 @@ final class MusicVisualView extends View {
         boolean hasLiveAudio = (SystemClock.elapsedRealtime() - lastAudioFrameAt) < 1200;
 
         if (!hasLiveAudio && playing) {
-            // Autonomous beat & spectrum synthesizer synchronized to song playback time
-            // Standard musical pulse at ~124 BPM (0.4838s per beat, 1.935s per 4-beat bar)
+            // Autonomous beat & rhythm synthesizer synchronized to song playback time (~124 BPM)
             double beatPhase = (elapsed % 0.4838) / 0.4838;
             double barPhase = (elapsed % 1.935) / 1.935;
 
-            // Kick drum: sharp attack on beat 1 & 3, exponential decay
-            float kick = (float) Math.max(0.0, Math.exp(-beatPhase * 7.5) * 1.1);
+            // Kick drum: sharp attack on beat 1 & 3
+            float kick = (float) Math.max(0.0, Math.exp(-beatPhase * 7.5) * 1.15);
 
-            // Snare / clap on beat 2 & 4 (at 0.25 and 0.75 of bar)
+            // Snare / clap on beat 2 & 4
             double snareDist1 = Math.abs(barPhase - 0.25);
             double snareDist2 = Math.abs(barPhase - 0.75);
             float snare = (float) (Math.max(0.0, Math.exp(-snareDist1 * 22.0)) + Math.max(0.0, Math.exp(-snareDist2 * 22.0)));
@@ -183,14 +211,14 @@ final class MusicVisualView extends View {
             }
         }
 
-        // Viscous ballistic filtering: fast magnetic spike attack, organic surface tension decay
+        // Viscous ballistic smoothing
         float bassSum = 0;
         float midSum = 0;
         float trebleSum = 0;
         for (int i = 0; i < 32; i++) {
             float target = levels[i];
             float current = smoothedLevels[i];
-            float speed = (target > current) ? Math.min(1.0f, dt * 26.0f) : Math.min(1.0f, dt * 8.0f);
+            float speed = (target > current) ? Math.min(1.0f, dt * 24.0f) : Math.min(1.0f, dt * 8.0f);
             smoothedLevels[i] = current + (target - current) * speed;
 
             if (i < 6) bassSum += smoothedLevels[i];
@@ -201,7 +229,18 @@ final class MusicVisualView extends View {
         smoothedBass = bassSum / 6.0f;
         smoothedMid = midSum / 12.0f;
         smoothedTreble = trebleSum / 14.0f;
-        bassEnergy = smoothedBass;
+
+        // Fluid lobe dynamics
+        fluidRotation += dt * (0.25f + 0.15f * smoothedBass);
+        float gainScale = 0.75f + (gain * 0.22f);
+        for (int i = 0; i < NUM_LOBES; i++) {
+            int band = Math.min(31, i * 5);
+            float excitation = smoothedLevels[band] * gainScale;
+            if (i == 0 || i == 3) excitation = Math.max(excitation, smoothedBass * 1.3f * gainScale);
+            lobeTarget[i] = 1.0f + excitation * 0.85f;
+            float speed = (lobeTarget[i] > lobeRadius[i]) ? Math.min(1.0f, dt * 20.0f) : Math.min(1.0f, dt * 7.0f);
+            lobeRadius[i] += (lobeTarget[i] - lobeRadius[i]) * speed;
+        }
     }
 
     double elapsedSeconds() {
@@ -211,8 +250,26 @@ final class MusicVisualView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_UP) {
-            float x = event.getX(), y = event.getY();
+        float x = event.getX(), y = event.getY();
+        int action = event.getAction();
+
+        if (action == MotionEvent.ACTION_DOWN) {
+            if ("Slider".equals(volumeControls) && sliderTrackRect.contains(x, y)) {
+                draggingSlider = true;
+                updateSliderFromTouch(x);
+                return true;
+            }
+        } else if (action == MotionEvent.ACTION_MOVE) {
+            if (draggingSlider) {
+                updateSliderFromTouch(x);
+                return true;
+            }
+        } else if (action == MotionEvent.ACTION_UP) {
+            if (draggingSlider) {
+                draggingSlider = false;
+                updateSliderFromTouch(x);
+                return true;
+            }
             if (showControls) {
                 if (playRect.contains(x, y)) {
                     if (listener != null) listener.onPlayPause();
@@ -233,14 +290,34 @@ final class MusicVisualView extends View {
                     if (listener != null) listener.onVolumeAdjust(5);
                     return true;
                 }
+            } else if ("Slider".equals(volumeControls)) {
+                if (volMinusRect.contains(x, y)) {
+                    if (listener != null) listener.onVolumeAdjust(-5);
+                    return true;
+                } else if (volPlusRect.contains(x, y)) {
+                    if (listener != null) listener.onVolumeAdjust(5);
+                    return true;
+                }
             }
-            // Canvas/background tap dismiss
+            // Tap outside controls dismisses screensaver
             if (tapDismiss && listener != null) {
                 listener.onDismiss();
                 return true;
             }
+        } else if (action == MotionEvent.ACTION_CANCEL) {
+            draggingSlider = false;
         }
         return true;
+    }
+
+    private void updateSliderFromTouch(float x) {
+        if (sliderTrackRect.width() <= 0) return;
+        float fraction = Math.max(0f, Math.min(1f, (x - sliderTrackRect.left) / sliderTrackRect.width()));
+        currentVolume = fraction;
+        invalidate();
+        if (listener != null) {
+            listener.onVolumeSet(fraction);
+        }
     }
 
     @Override
@@ -251,32 +328,33 @@ final class MusicVisualView extends View {
 
         double elapsed = elapsedSeconds();
         double time = SystemClock.elapsedRealtime() / 1000.0;
-
         long now = SystemClock.elapsedRealtime();
         float dt = lastPhysicsTime > 0 ? Math.min(0.08f, (now - lastPhysicsTime) / 1000.0f) : 0.033f;
         lastPhysicsTime = now;
 
         updateAudioDynamics(dt, elapsed);
 
+        // Layout mode: Portrait vs Landscape split
+        boolean isPortrait = h >= w;
+        boolean isSplit = !isPortrait && ("hybrid_vinyl".equals(effect) || "hybrid_ferrofluid".equals(effect));
+
         // 1. Draw Background
         drawBackground(canvas, w, h);
 
-        // 2. Determine Layout (Split-stage vs Centered)
-        boolean isSplit = "hybrid_vinyl".equals(effect) || "hybrid_ferrofluid".equals(effect);
-
+        // 2. Draw Visual Centerpiece
         if ("vinyl".equals(effect) || "hybrid_vinyl".equals(effect)) {
-            drawVinyl(canvas, w, h, isSplit, playing, coverArt, elapsed, smoothedBass);
+            drawVinyl(canvas, w, h, isPortrait, isSplit, playing, coverArt, elapsed, smoothedBass);
         } else if ("ferrofluid".equals(effect) || "hybrid_ferrofluid".equals(effect)) {
-            drawFerrofluid(canvas, w, h, isSplit, smoothedBass, time);
+            drawFerrofluid(canvas, w, h, isPortrait, isSplit, smoothedBass, time);
         } else if ("cotodama".equals(effect)) {
             drawCotodamaAmbient(canvas, w, h);
         }
 
-        // 3. Draw Track Metadata (Title, Artist)
-        drawTrackInfo(canvas, w, h, isSplit);
+        // 3. Draw Track Metadata (Always drawn cleanly centered in portrait or split)
+        drawTrackInfo(canvas, w, h, isPortrait, isSplit);
 
-        // 4. Draw Controls
-        drawControls(canvas, w, h);
+        // 4. Draw Controls & Volume Slider
+        drawControls(canvas, w, h, isPortrait, isSplit);
 
         if (playing || "ferrofluid".equals(effect) || "hybrid_ferrofluid".equals(effect) || "cotodama".equals(effect)) {
             postInvalidateOnAnimation();
@@ -289,65 +367,75 @@ final class MusicVisualView extends View {
         } else if ("Deep Charcoal".equals(backgroundTheme)) {
             c.drawColor(0xFF101317);
         } else {
-            // Album Tinted with subtle dark overlay
-            if (blurredBg != null && !blurredBg.isRecycled()) {
-                paint.setAlpha(180);
-                rect.set(0, 0, w, h);
-                c.drawBitmap(blurredBg, null, rect, paint);
-                paint.setAlpha(255);
-                c.drawColor(0xCC0D1014);
-            } else {
-                c.drawColor(0xFF13171C);
-            }
+            // Album Tinted: smooth saturated backdrop matching album palette
+            c.drawColor(dominantColor);
+            // Subtle top-down lighting vignette
+            paint.setStyle(Paint.Style.FILL);
+            paint.setShader(new RadialGradient(w * 0.5f, h * 0.35f, Math.max(w, h) * 0.85f,
+                    new int[]{0x2AFFFFFF, 0x00000000, 0x55000000},
+                    new float[]{0f, 0.65f, 1f}, Shader.TileMode.CLAMP));
+            c.drawRect(0, 0, w, h, paint);
+            paint.setShader(null);
         }
     }
 
-    private void drawVinyl(Canvas c, float w, float h, boolean split, boolean isPlaying,
-                           Bitmap cover, double elapsed, float bass) {
+    private void drawVinyl(Canvas c, float w, float h, boolean isPortrait, boolean split,
+                           boolean isPlaying, Bitmap cover, double elapsed, float bass) {
         float cx = split ? w * 0.23f : w * 0.50f;
-        float cy = h * 0.48f;
-        float discR = Math.min(w, h) * (split ? 0.35f : 0.40f);
+        float cy = isPortrait ? h * 0.36f : h * 0.44f;
+        float discR = isPortrait ? Math.min(w * 0.41f, h * 0.25f) : Math.min(w * (split ? 0.20f : 0.34f), h * 0.36f);
         if (discR <= 10) return;
 
         boolean withGlow = !"Disc Only (Minimal)".equals(vinylStyle);
 
-        // Ambient Backlight Glow
+        // 1. Ambient Glow
         if (withGlow) {
             paint.setStyle(Paint.Style.FILL);
-            float glowR = discR * (1.20f + 0.15f * bass);
+            float glowR = discR * (1.28f + 0.15f * bass);
+            int glowColor = (dominantColor & 0x00FFFFFF) | 0x44000000;
             paint.setShader(new RadialGradient(cx, cy, glowR,
-                    new int[]{0x4065E5CF, 0x18182230, 0x00000000},
+                    new int[]{glowColor, 0x1A000000, 0x00000000},
                     new float[]{0f, 0.65f, 1f}, Shader.TileMode.CLAMP));
             c.drawCircle(cx, cy, glowR, paint);
             paint.setShader(null);
         }
 
-        // Disc Body
+        // 2. Realistic Multi-Layer Drop Shadow (floating 3D disc)
+        float shadowY = cy + discR * 0.08f;
+        float shadowR = discR * 1.12f;
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xFF0D0E11);
+        paint.setShader(new RadialGradient(cx, shadowY, shadowR,
+                new int[]{0x75000000, 0x30000000, 0x00000000},
+                new float[]{0.60f, 0.88f, 1f}, Shader.TileMode.CLAMP));
+        c.drawCircle(cx, shadowY, shadowR, paint);
+        paint.setShader(null);
+
+        // 3. Disc Body
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xFF0F1014);
         c.drawCircle(cx, cy, discR, paint);
 
-        // Concentric Micro-Grooves (Rilles)
+        // 4. Concentric Micro-Grooves (Rilles)
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeCap(Paint.Cap.BUTT);
-        float labelR = discR * 0.38f;
-        int rings = economy ? 6 : 10;
+        float labelR = discR * 0.44f;
+        int rings = economy ? 8 : 14;
         for (int i = 0; i < rings; i++) {
-            float r = labelR + (discR - labelR) * (i + 1) / (rings + 1f);
-            paint.setColor((i % 2 == 0) ? 0x1CFFFFFF : 0x0EFFFFFF);
+            float r = labelR * 1.05f + (discR * 0.95f - labelR * 1.05f) * (i + 1) / (rings + 1f);
+            paint.setColor((i % 2 == 0) ? 0x1AFFFFFF : 0x0AFFFFFF);
             paint.setStrokeWidth(1.2f);
             c.drawCircle(cx, cy, r, paint);
         }
 
-        // Anisotropic Sheen Reflection (Bow-tie reflection rotating at 33⅓ RPM)
-        float angle = isPlaying ? (float) ((elapsed * 200.0) % 360.0) : 0f;
+        // 5. Anisotropic Radial Sheen (Bow-tie reflection rotating at 33⅓ RPM)
+        float angle = isPlaying ? (float) ((elapsed * 200.0) % 360.0) : 15f;
         rect.set(cx - discR, cy - discR, cx + discR, cy + discR);
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0x14FFFFFF);
-        c.drawArc(rect, angle - 24, 48, true, paint);
-        c.drawArc(rect, angle + 156, 48, true, paint);
+        paint.setColor(0x1AFFFFFF);
+        c.drawArc(rect, angle - 22, 44, true, paint);
+        c.drawArc(rect, angle + 158, 44, true, paint);
 
-        // Center Label (Circular Cropped Album Art)
+        // 6. Center Label (Album Art - 100% full crisp opacity!)
         c.save();
         path.reset();
         path.addCircle(cx, cy, labelR, Path.Direction.CW);
@@ -359,201 +447,237 @@ final class MusicVisualView extends View {
             int minSide = Math.min(cover.getWidth(), cover.getHeight());
             Rect src = new Rect((cover.getWidth() - minSide) / 2, (cover.getHeight() - minSide) / 2,
                     (cover.getWidth() + minSide) / 2, (cover.getHeight() + minSide) / 2);
+            paint.reset();
+            paint.setAntiAlias(true);
+            paint.setFilterBitmap(true);
             c.drawBitmap(cover, src, rect, paint);
             c.restore();
         } else {
-            paint.setColor(0xFF232D38);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xFF263238);
             c.drawCircle(cx, cy, labelR, paint);
+            // Default vinyl record label placeholder
+            paint.setColor(0xFF65E5CF);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(2f);
+            c.drawCircle(cx, cy, labelR * 0.65f, paint);
         }
         c.restore();
 
         // Label Outer Rim
         paint.setStyle(Paint.Style.STROKE);
-        paint.setColor(0x44000000);
+        paint.setColor(0x40000000);
         paint.setStrokeWidth(2.5f);
         c.drawCircle(cx, cy, labelR, paint);
 
-        // Spindle Hole with Brass Rim
+        // Spindle Hole with Chrome/Brass Rim
         float holeR = discR * 0.045f;
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xFF040507);
+        paint.setColor(0xFF060709);
         c.drawCircle(cx, cy, holeR, paint);
         paint.setStyle(Paint.Style.STROKE);
-        paint.setColor(0xFFB0BAC6);
-        paint.setStrokeWidth(1.6f);
+        paint.setColor(0xFFCAD4DF);
+        paint.setStrokeWidth(1.8f);
         c.drawCircle(cx, cy, holeR, paint);
-        paint.setStyle(Paint.Style.FILL);
+
+        // 7. Realistic Tonearm / Stylus (rested on disc when playing, lifted/rested off when paused)
+        drawTonearm(c, cx, cy, discR, isPlaying);
     }
 
-    private void drawFerrofluid(Canvas c, float w, float h, boolean split, float bass, double time) {
-        float cx = split ? w * 0.23f : w * 0.50f;
-        float cy = h * 0.48f;
-        // Bob center of mass with bass transients
-        cy -= smoothedBass * 16.0f;
+    private void drawTonearm(Canvas c, float cx, float cy, float discR, boolean isPlaying) {
+        float pivotX = cx + discR * 0.80f;
+        float pivotY = cy - discR * 0.80f;
 
-        float baseR = Math.min(w, h) * (split ? 0.15f : 0.20f) * (1.0f + 0.10f * smoothedBass);
-        if (baseR <= 10) return;
-
-        // Resolve colors
-        int auraColor = 0x351E293B; // Deep obsidian aura
-        int fluidColor = 0xFF07080B; // Deep glossy black
-        int highlightColor = 0xAAFFFFFF;
-
-        if ("Cyber Cyan".equals(ferrofluidColor)) {
-            auraColor = 0x6000E5FF;
-            fluidColor = 0xFF05151D;
-            highlightColor = 0xEE70FFFF;
-        } else if ("Neon Magenta".equals(ferrofluidColor)) {
-            auraColor = 0x60FF0077;
-            fluidColor = 0xFF190513;
-            highlightColor = 0xEEFF70BA;
-        } else if ("Album Matched".equals(ferrofluidColor)) {
-            int dominant = extractDominantColor();
-            auraColor = (dominant & 0x00FFFFFF) | 0x55000000;
-            fluidColor = 0xFF07080B;
-            highlightColor = 0xEEFFFFFF;
-        }
-
-        // 1. Magnetic Field Aura (Pulsing with overall energy)
-        float auraR = baseR * (1.75f + 0.45f * smoothedBass);
+        // Base gimbal at top-right
         paint.setStyle(Paint.Style.FILL);
-        paint.setShader(new RadialGradient(cx, cy, auraR,
-                new int[]{auraColor, 0x12102030, 0x00000000},
-                new float[]{0f, 0.65f, 1f}, Shader.TileMode.CLAMP));
-        c.drawCircle(cx, cy, auraR, paint);
+        paint.setColor(0x55000000);
+        c.drawCircle(pivotX + 2, pivotY + 4, 16, paint); // Gimbal shadow
+        paint.setColor(0xFF232A34);
+        c.drawCircle(pivotX, pivotY, 15, paint);
+        paint.setColor(0xFF384352);
+        c.drawCircle(pivotX, pivotY, 11, paint);
+        paint.setColor(0xFF9AA7B6);
+        c.drawCircle(pivotX, pivotY, 4, paint);
+
+        // Needle contact point
+        float cartX = isPlaying ? (cx + discR * 0.65f) : (cx + discR * 0.90f);
+        float cartY = isPlaying ? (cy - discR * 0.32f) : (cy - discR * 0.36f);
+
+        // Tonearm shadow
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setColor(0x40000000);
+        paint.setStrokeWidth(4.5f);
+        c.drawLine(pivotX + 3, pivotY + 5, cartX + 3, cartY + 5, paint);
+
+        // Tonearm metallic arm tube
+        paint.setColor(0xFF1E252E);
+        c.drawLine(pivotX, pivotY, cartX, cartY, paint);
+        paint.setColor(0xFF708092);
+        paint.setStrokeWidth(2.0f);
+        c.drawLine(pivotX, pivotY, cartX, cartY, paint);
+
+        // Cartridge headshell (angled rectangle)
+        c.save();
+        c.translate(cartX, cartY);
+        float angle = (float) Math.toDegrees(Math.atan2(cartY - pivotY, cartX - pivotX)) + 22f;
+        c.rotate(angle);
+        rect.set(-5, -12, 5, 4);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xFF12161C);
+        c.drawRoundRect(rect, 2, 2, paint);
+        // Cartridge chrome accent line
+        paint.setColor(0xFFE2E8F0);
+        c.drawRect(-3, -10, 3, -8, paint);
+        c.restore();
+    }
+
+    private void drawFerrofluid(Canvas c, float w, float h, boolean isPortrait, boolean split, float bass, double time) {
+        float cx = split ? w * 0.23f : w * 0.50f;
+        float cy = isPortrait ? h * 0.36f : h * 0.44f;
+        float chamberR = isPortrait ? Math.min(w * 0.41f, h * 0.25f) : Math.min(w * (split ? 0.20f : 0.34f), h * 0.36f);
+        if (chamberR <= 10) return;
+
+        // 1. Chamber Outer Drop Shadow
+        float shadowY = cy + chamberR * 0.08f;
+        paint.setStyle(Paint.Style.FILL);
+        paint.setShader(new RadialGradient(cx, shadowY, chamberR * 1.15f,
+                new int[]{0x75000000, 0x30000000, 0x00000000},
+                new float[]{0.60f, 0.88f, 1f}, Shader.TileMode.CLAMP));
+        c.drawCircle(cx, shadowY, chamberR * 1.15f, paint);
         paint.setShader(null);
 
-        // 2. Rosensweig Spikes (Needle-sharp conical peaks)
-        int spikeCount = economy ? 20 : 28;
-        float[] apexX = new float[spikeCount];
-        float[] apexY = new float[spikeCount];
-        float[] apexR = new float[spikeCount];
-        float[] valleyX = new float[spikeCount];
-        float[] valleyY = new float[spikeCount];
+        // 2. Bezel Ring (Machined metallic circular frame)
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xFF1A2028);
+        c.drawCircle(cx, cy, chamberR, paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setColor(0xFF3B4656);
+        paint.setStrokeWidth(3.0f);
+        c.drawCircle(cx, cy, chamberR, paint);
 
-        float angleStep = (float) (Math.PI * 2.0 / spikeCount);
-        float gainScale = 0.75f + (gain * 0.20f);
+        // 3. Backlit Glass Chamber Interior
+        float glassR = chamberR * 0.94f;
+        int centerColor = 0xFFFFFFFF;
+        int midColor = 0xFFEDF2F7;
+        int edgeColor = 0xFFD2D9E2;
 
-        for (int i = 0; i < spikeCount; i++) {
-            float theta = (float) (i * angleStep - Math.PI / 2.0);
-
-            // Polar magnetic alignment (top & bottom poles have strongest spikes)
-            float poleFactor = (float) Math.abs(Math.sin(theta)); // 1.0 at top/bottom poles
-            int band = Math.min(31, Math.abs((i * 32) / spikeCount));
-            float bandVal = smoothedLevels[band];
-
-            // Nonlinear spike excitation
-            float excitation = (float) Math.pow(Math.max(0f, bandVal), 1.30) * gainScale;
-            float poleBoost = 1.0f + 0.70f * poleFactor * smoothedBass;
-
-            // Micro capillary ripple for liquid trembling
-            float ripple = (float) Math.sin(time * 6.0 + i * 1.3) * (baseR * (0.02f + 0.04f * smoothedTreble));
-
-            float spikeHeight = excitation * baseR * 1.25f * poleBoost;
-            float rPeak = baseR + spikeHeight + ripple;
-            apexR[i] = rPeak;
-            apexX[i] = cx + (float) Math.cos(theta) * rPeak;
-            apexY[i] = cy + (float) Math.sin(theta) * rPeak;
-
-            // Valley between spike i and spike i+1
-            float thetaMid = theta + angleStep * 0.5f;
-            float valleyR = baseR * (0.94f - 0.05f * smoothedBass) + ripple * 0.4f;
-            valleyX[i] = cx + (float) Math.cos(thetaMid) * valleyR;
-            valleyY[i] = cy + (float) Math.sin(thetaMid) * valleyR;
+        if ("Cyber Cyan".equals(ferrofluidColor)) {
+            centerColor = 0xFFE0FCFF;
+            midColor = 0xFF65E5CF;
+            edgeColor = 0xFF007799;
+        } else if ("Neon Magenta".equals(ferrofluidColor)) {
+            centerColor = 0xFFFFE8F5;
+            midColor = 0xFFFF65B2;
+            edgeColor = 0xFF990055;
+        } else if ("Album Matched".equals(ferrofluidColor)) {
+            centerColor = 0xFFFFFFFF;
+            midColor = (dominantColor & 0x00FFFFFF) | 0xAA000000;
+            edgeColor = dominantColor;
         }
 
-        // 3. Draw Body with Sharp Cusps (Concave flank beziers to needle tips)
+        paint.setStyle(Paint.Style.FILL);
+        paint.setShader(new RadialGradient(cx, cy, glassR,
+                new int[]{centerColor, midColor, edgeColor},
+                new float[]{0f, 0.65f, 1f}, Shader.TileMode.CLAMP));
+        c.drawCircle(cx, cy, glassR, paint);
+        paint.setShader(null);
+
+        // Inner rim shadow for glass depth
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setColor(0x35000000);
+        paint.setStrokeWidth(4.0f);
+        c.drawCircle(cx, cy, glassR - 2, paint);
+
+        // 4. Organic Ferrofluid Blob (Venom/Amoeba Liquid Goo with 6 Smooth Harmonics)
+        float baseR = glassR * 0.38f;
+        int numPoints = economy ? 24 : 36;
+        float[] ptsX = new float[numPoints];
+        float[] ptsY = new float[numPoints];
+
+        float angleStep = (float) (Math.PI * 2.0 / numPoints);
+        float gainScale = 0.75f + (gain * 0.22f);
+
+        for (int i = 0; i < numPoints; i++) {
+            float theta = i * angleStep;
+            // Map angle to the 6 primary magnetic lobes
+            float lobePhase = (float) ((theta + fluidRotation) / (Math.PI * 2.0) * NUM_LOBES);
+            int lobeIdx = (int) Math.floor(lobePhase) % NUM_LOBES;
+            if (lobeIdx < 0) lobeIdx += NUM_LOBES;
+            int nextLobe = (lobeIdx + 1) % NUM_LOBES;
+            float t = lobePhase - (float) Math.floor(lobePhase);
+
+            // Hermite cubic smoothing between lobes
+            float smoothT = t * t * (3 - 2 * t);
+            float rLobe = lobeRadius[lobeIdx] * (1 - smoothT) + lobeRadius[nextLobe] * smoothT;
+
+            // Surface micro-shiver from treble frequencies
+            float shiver = (float) Math.sin(time * 8.0 + i * 1.5) * (baseR * 0.03f * smoothedTreble);
+
+            float r = baseR * rLobe + shiver;
+            // Bound fluid within glass chamber
+            r = Math.min(glassR * 0.90f, r);
+
+            ptsX[i] = cx + (float) Math.cos(theta) * r;
+            ptsY[i] = cy + (float) Math.sin(theta) * r;
+        }
+
+        // Draw organic spline curve for fluid body
         path.reset();
-        int last = spikeCount - 1;
-        path.moveTo(valleyX[last], valleyY[last]);
-
-        for (int i = 0; i < spikeCount; i++) {
-            // Flank from previous valley to apex i:
-            // Control point pulled inward toward core makes the flank concave and the tip razor sharp!
-            float flankMidAngle1 = (float) (i * angleStep - Math.PI / 2.0 - angleStep * 0.22f);
-            float ctrlR1 = baseR * 1.02f + (apexR[i] - baseR) * 0.28f;
-            float c1x = cx + (float) Math.cos(flankMidAngle1) * ctrlR1;
-            float c1y = cy + (float) Math.sin(flankMidAngle1) * ctrlR1;
-            path.quadTo(c1x, c1y, apexX[i], apexY[i]);
-
-            // Flank from apex i down to valley i:
-            float flankMidAngle2 = (float) (i * angleStep - Math.PI / 2.0 + angleStep * 0.22f);
-            float ctrlR2 = baseR * 1.02f + (apexR[i] - baseR) * 0.28f;
-            float c2x = cx + (float) Math.cos(flankMidAngle2) * ctrlR2;
-            float c2y = cy + (float) Math.sin(flankMidAngle2) * ctrlR2;
-            path.quadTo(c2x, c2y, valleyX[i], valleyY[i]);
+        path.moveTo((ptsX[0] + ptsX[numPoints - 1]) / 2f, (ptsY[0] + ptsY[numPoints - 1]) / 2f);
+        for (int i = 0; i < numPoints; i++) {
+            int next = (i + 1) % numPoints;
+            float midX = (ptsX[i] + ptsX[next]) / 2f;
+            float midY = (ptsY[i] + ptsY[next]) / 2f;
+            path.quadTo(ptsX[i], ptsY[i], midX, midY);
         }
         path.close();
 
-        // Fill fluid body
+        // Fill deep obsidian jet black fluid body
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(fluidColor);
+        paint.setColor(0xFF050608);
         c.drawPath(path, paint);
 
-        // 4. Specular Spine Ridge Highlights (Wet liquid 3D chrome look)
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeCap(Paint.Cap.ROUND);
-        for (int i = 0; i < spikeCount; i++) {
-            float spikeLen = apexR[i] - baseR;
-            if (spikeLen > baseR * 0.08f) {
-                float theta = (float) (i * angleStep - Math.PI / 2.0);
-                // Angle relative to light source (-3pi/4 = top-left)
-                float lightDot = (float) Math.max(0.15, Math.cos(theta - (-2.356)));
-                int alpha = Math.min(230, Math.round(lightDot * Math.min(1.0f, spikeLen / (baseR * 0.45f)) * 255f));
-                if (alpha > 20) {
-                    paint.setColor((highlightColor & 0x00FFFFFF) | (alpha << 24));
-                    paint.setStrokeWidth(Math.max(1.2f, Math.min(3.5f, spikeLen * 0.08f)));
-                    float startR = baseR + spikeLen * 0.22f;
-                    float endR = baseR + spikeLen * 0.94f;
-                    c.drawLine(
-                            cx + (float) Math.cos(theta) * startR,
-                            cy + (float) Math.sin(theta) * startR,
-                            cx + (float) Math.cos(theta) * endR,
-                            cy + (float) Math.sin(theta) * endR,
-                            paint
-                    );
-                }
-            }
-        }
-        paint.setStyle(Paint.Style.FILL);
-
-        // 5. Specular Wet Dome Highlight (Overhead light glint)
-        float specX = cx - baseR * 0.30f;
-        float specY = cy - baseR * 0.30f;
-        float specR = baseR * 0.48f;
+        // 5. Liquid Specular Highlights (Wet 3D dome sheen, NO rigid sticks!)
+        float specX = cx - baseR * 0.28f;
+        float specY = cy - baseR * 0.28f;
+        float specR = baseR * 0.55f;
         paint.setShader(new RadialGradient(specX, specY, specR,
-                new int[]{0x88FFFFFF, 0x28FFFFFF, 0x00FFFFFF},
-                new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
+                new int[]{0x80FFFFFF, 0x22FFFFFF, 0x00FFFFFF},
+                new float[]{0f, 0.50f, 1f}, Shader.TileMode.CLAMP));
         c.drawCircle(specX, specY, specR, paint);
         paint.setShader(null);
 
-        // Sharp pin-point glint on the wet liquid dome
-        paint.setColor(0xDDFFFFFF);
-        c.drawCircle(specX - specR * 0.22f, specY - specR * 0.22f, baseR * 0.065f, paint);
+        // Sharp pinpoint glint
+        paint.setColor(0xCCFFFFFF);
+        c.drawCircle(specX - specR * 0.25f, specY - specR * 0.25f, baseR * 0.08f, paint);
 
-        // 6. Rayleigh-Plateau Satellite Droplets (Ejected beads on heavy kicks)
-        if (smoothedBass > 0.30f) {
-            paint.setColor(fluidColor);
-            int satellites = economy ? 4 : 6;
+        // 6. Dynamic Satellite Liquid Beads (Rayleigh-Plateau pinch-off on heavy beats)
+        if (smoothedBass > 0.32f) {
+            paint.setColor(0xFF050608);
+            int satellites = economy ? 3 : 5;
             for (int s = 0; s < satellites; s++) {
-                float satAngle = (float) ((s % 2 == 0 ? -Math.PI / 2 : Math.PI / 2) + ((s / 2) - 0.5f) * 0.48f);
-                float surge = (smoothedBass - 0.30f) / 0.70f;
-                float dist = baseR * (1.28f + surge * 0.60f * gainScale);
-                float dropR = 3.5f + surge * 7.0f;
+                float satAngle = (float) (s * (Math.PI * 2.0 / satellites) + fluidRotation * 1.5);
+                float surge = (smoothedBass - 0.32f) / 0.68f;
+                float dist = Math.min(glassR * 0.88f, baseR * (1.35f + surge * 0.65f * gainScale));
+                float dropR = 4f + surge * 6f;
 
                 float dx = cx + (float) Math.cos(satAngle) * dist;
                 float dy = cy + (float) Math.sin(satAngle) * dist;
 
-                // Satellite body
                 paint.setStyle(Paint.Style.FILL);
-                paint.setColor(fluidColor);
                 c.drawCircle(dx, dy, dropR, paint);
-
-                // Satellite glint
-                paint.setColor(0xCCFFFFFF);
-                c.drawCircle(dx - dropR * 0.32f, dy - dropR * 0.32f, dropR * 0.38f, paint);
+                // Mini glint
+                paint.setColor(0xAAFFFFFF);
+                c.drawCircle(dx - dropR * 0.3f, dy - dropR * 0.3f, dropR * 0.35f, paint);
+                paint.setColor(0xFF050608);
             }
         }
+
+        // 7. Glass Porthole Front Reflection Arc (Authentic glass sheen across porthole)
+        rect.set(cx - glassR, cy - glassR, cx + glassR, cy + glassR);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0x18FFFFFF);
+        c.drawArc(rect, 200, 70, true, paint);
     }
 
     private void drawCotodamaAmbient(Canvas c, float w, float h) {
@@ -570,103 +694,163 @@ final class MusicVisualView extends View {
         c.drawPath(path, paint);
     }
 
-    private void drawTrackInfo(Canvas c, float w, float h, boolean split) {
-        if (split) {
-            // Track title in bottom left beneath vinyl/ferrofluid
-            paint.setStyle(Paint.Style.FILL);
+    private void drawTrackInfo(Canvas c, float w, float h, boolean isPortrait, boolean split) {
+        paint.setStyle(Paint.Style.FILL);
+        paint.setTextAlign(Paint.Align.CENTER);
+
+        float textX = split ? w * 0.23f : w * 0.50f;
+        float textY = isPortrait ? h * 0.66f : h * 0.82f;
+
+        if (!trackTitle.isEmpty()) {
             paint.setColor(MusicUi.INK);
-            paint.setTextSize(MusicUi.dp(getContext(), 18));
-            paint.setTextAlign(Paint.Align.CENTER);
-            float textX = w * 0.23f;
-            float textY = h * 0.88f;
-            if (!trackTitle.isEmpty()) {
-                c.drawText(trackTitle, textX, textY, paint);
-            }
-            if (!trackArtist.isEmpty()) {
-                paint.setColor(MusicUi.MUTED);
-                paint.setTextSize(MusicUi.dp(getContext(), 14));
-                c.drawText(trackArtist, textX, textY + MusicUi.dp(getContext(), 20), paint);
-            }
+            paint.setTextSize(MusicUi.dp(getContext(), isPortrait ? 22 : 18));
+            paint.setFakeBoldText(true);
+            c.drawText(trackTitle, textX, textY, paint);
+        }
+        if (!trackArtist.isEmpty()) {
+            paint.setColor(0xCCAAB7C4);
+            paint.setTextSize(MusicUi.dp(getContext(), isPortrait ? 15 : 13));
+            paint.setFakeBoldText(false);
+            c.drawText(trackArtist, textX, textY + MusicUi.dp(getContext(), isPortrait ? 24 : 20), paint);
         }
     }
 
-    private void drawControls(Canvas c, float w, float h) {
+    private void drawControls(Canvas c, float w, float h, boolean isPortrait, boolean split) {
         float density = getResources().getDisplayMetrics().density;
-        float bottomMargin = 28 * density;
 
-        // Play/Pause, Prev, Next Controls in Bottom Center
+        float ctrlY = isPortrait ? h * 0.77f : h * 0.92f;
+        float ctrlX = split ? w * 0.23f : w * 0.50f;
+
+        // 1. Playback Controls (Pills matching home-assistant-vinyl-player)
         if (showControls) {
-            float btnR = 24 * density;
-            float cy = h - bottomMargin;
-            float cx = w * 0.50f;
+            float playR = 26 * density;
+            float skipR = 21 * density;
+            float spacing = 62 * density;
 
-            playRect.set(cx - btnR, cy - btnR, cx + btnR, cy + btnR);
-            prevRect.set(cx - 70 * density - btnR, cy - btnR, cx - 70 * density + btnR, cy + btnR);
-            nextRect.set(cx + 70 * density - btnR, cy - btnR, cx + 70 * density + btnR, cy + btnR);
+            playRect.set(ctrlX - playR, ctrlY - playR, ctrlX + playR, ctrlY + playR);
+            prevRect.set(ctrlX - spacing - skipR, ctrlY - skipR, ctrlX - spacing + skipR, ctrlY + skipR);
+            nextRect.set(ctrlX + spacing - skipR, ctrlY - skipR, ctrlX + spacing + skipR, ctrlY + skipR);
 
-            // Draw circular backgrounds
+            // Translucent rounded pills
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(0xCC1F2833);
-            c.drawCircle(cx, cy, btnR, paint);
-            c.drawCircle(cx - 70 * density, cy, btnR, paint);
-            c.drawCircle(cx + 70 * density, cy, btnR, paint);
+            paint.setColor(0x30FFFFFF);
+            c.drawCircle(ctrlX, ctrlY, playR, paint);
+            paint.setColor(0x20FFFFFF);
+            c.drawCircle(ctrlX - spacing, ctrlY, skipR, paint);
+            c.drawCircle(ctrlX + spacing, ctrlY, skipR, paint);
 
-            // Draw glyphs
+            // Control glyphs
             paint.setColor(MusicUi.INK);
             if (playing) {
                 // Pause bars
-                c.drawRoundRect(cx - 6 * density, cy - 8 * density, cx - 2 * density, cy + 8 * density, 2, 2, paint);
-                c.drawRoundRect(cx + 2 * density, cy - 8 * density, cx + 6 * density, cy + 8 * density, 2, 2, paint);
+                c.drawRoundRect(ctrlX - 6 * density, ctrlY - 8 * density, ctrlX - 2 * density, ctrlY + 8 * density, 2, 2, paint);
+                c.drawRoundRect(ctrlX + 2 * density, ctrlY - 8 * density, ctrlX + 6 * density, ctrlY + 8 * density, 2, 2, paint);
             } else {
                 // Play triangle
                 path.reset();
-                path.moveTo(cx - 4 * density, cy - 8 * density);
-                path.lineTo(cx + 7 * density, cy);
-                path.lineTo(cx - 4 * density, cy + 8 * density);
+                path.moveTo(ctrlX - 5 * density, ctrlY - 8 * density);
+                path.lineTo(ctrlX + 7 * density, ctrlY);
+                path.lineTo(ctrlX - 5 * density, ctrlY + 8 * density);
                 path.close();
                 c.drawPath(path, paint);
             }
 
             // Prev icon
             path.reset();
-            path.moveTo(cx - 65 * density, cy - 6 * density);
-            path.lineTo(cx - 75 * density, cy);
-            path.lineTo(cx - 65 * density, cy + 6 * density);
+            path.moveTo(ctrlX - spacing + 4 * density, ctrlY - 6 * density);
+            path.lineTo(ctrlX - spacing - 5 * density, ctrlY);
+            path.lineTo(ctrlX - spacing + 4 * density, ctrlY + 6 * density);
             path.close();
             c.drawPath(path, paint);
-            c.drawRect(cx - 77 * density, cy - 6 * density, cx - 75 * density, cy + 6 * density, paint);
+            c.drawRect(ctrlX - spacing - 7 * density, ctrlY - 6 * density, ctrlX - spacing - 5 * density, ctrlY + 6 * density, paint);
 
             // Next icon
             path.reset();
-            path.moveTo(cx + 65 * density, cy - 6 * density);
-            path.lineTo(cx + 75 * density, cy);
-            path.lineTo(cx + 65 * density, cy + 6 * density);
+            path.moveTo(ctrlX + spacing - 4 * density, ctrlY - 6 * density);
+            path.lineTo(ctrlX + spacing + 5 * density, ctrlY);
+            path.lineTo(ctrlX + spacing - 4 * density, ctrlY + 6 * density);
             path.close();
             c.drawPath(path, paint);
-            c.drawRect(cx + 75 * density, cy - 6 * density, cx + 77 * density, cy + 6 * density, paint);
+            c.drawRect(ctrlX + spacing + 5 * density, ctrlY - 6 * density, ctrlX + spacing + 7 * density, ctrlY + 6 * density, paint);
         }
 
-        // Volume Buttons in Bottom Right
-        if ("Buttons".equals(volumeControls)) {
-            float btnR = 20 * density;
-            float cy = h - bottomMargin;
-            float rx = w - 40 * density;
-            volPlusRect.set(rx - btnR, cy - btnR, rx + btnR, cy + btnR);
-            volMinusRect.set(rx - 50 * density - btnR, cy - btnR, rx - 50 * density + btnR, cy + btnR);
+        // 2. Volume Controls (Slider or Buttons)
+        if ("Slider".equals(volumeControls)) {
+            float sliderY = isPortrait ? h * 0.88f : h * 0.94f;
+            float sliderW = isPortrait ? (w * 0.65f) : (w * (split ? 0.32f : 0.45f));
+            float sliderLeft = ctrlX - sliderW * 0.5f;
+            float sliderRight = ctrlX + sliderW * 0.5f;
+            float trackH = 4 * density;
+
+            sliderTrackRect.set(sliderLeft, sliderY - 14 * density, sliderRight, sliderY + 14 * density);
+
+            // Speaker Low icon on left
+            float leftIconX = sliderLeft - 22 * density;
+            volMinusRect.set(leftIconX - 14 * density, sliderY - 14 * density, leftIconX + 14 * density, sliderY + 14 * density);
+            drawSpeakerIcon(c, leftIconX, sliderY, density, false);
+
+            // Speaker High icon on right
+            float rightIconX = sliderRight + 22 * density;
+            volPlusRect.set(rightIconX - 14 * density, sliderY - 14 * density, rightIconX + 14 * density, sliderY + 14 * density);
+            drawSpeakerIcon(c, rightIconX, sliderY, density, true);
+
+            // Background track
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0x35FFFFFF);
+            c.drawRoundRect(sliderLeft, sliderY - trackH * 0.5f, sliderRight, sliderY + trackH * 0.5f, trackH, trackH, paint);
+
+            // Active track
+            float knobX = sliderLeft + sliderW * currentVolume;
+            paint.setColor(0xEEFFFFFF);
+            c.drawRoundRect(sliderLeft, sliderY - trackH * 0.5f, knobX, sliderY + trackH * 0.5f, trackH, trackH, paint);
+
+            // Knob thumb
+            paint.setColor(0xFFFFFFFF);
+            c.drawCircle(knobX, sliderY, 7 * density, paint);
+        } else if ("Buttons".equals(volumeControls)) {
+            float btnR = 18 * density;
+            float cy = isPortrait ? h * 0.88f : h * 0.92f;
+            float rx = isPortrait ? (w * 0.5f) : (w - 40 * density);
+
+            volMinusRect.set(rx - 38 * density - btnR, cy - btnR, rx - 38 * density + btnR, cy + btnR);
+            volPlusRect.set(rx + 38 * density - btnR, cy - btnR, rx + 38 * density + btnR, cy + btnR);
 
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(0xCC1F2833);
-            c.drawCircle(rx, cy, btnR, paint);
-            c.drawCircle(rx - 50 * density, cy, btnR, paint);
+            paint.setColor(0x25FFFFFF);
+            c.drawCircle(rx - 38 * density, cy, btnR, paint);
+            c.drawCircle(rx + 38 * density, cy, btnR, paint);
 
             paint.setColor(MusicUi.INK);
             paint.setStrokeWidth(2 * density);
             paint.setStyle(Paint.Style.STROKE);
-            // Plus
-            c.drawLine(rx - 6 * density, cy, rx + 6 * density, cy, paint);
-            c.drawLine(rx, cy - 6 * density, rx, cy + 6 * density, paint);
             // Minus
-            c.drawLine(rx - 56 * density, cy, rx - 44 * density, cy, paint);
+            c.drawLine(rx - 44 * density, cy, rx - 32 * density, cy, paint);
+            // Plus
+            c.drawLine(rx + 32 * density, cy, rx + 44 * density, cy, paint);
+            c.drawLine(rx + 38 * density, cy - 6 * density, rx + 38 * density, cy + 6 * density, paint);
+            paint.setStyle(Paint.Style.FILL);
+        }
+    }
+
+    private void drawSpeakerIcon(Canvas c, float cx, float cy, float density, boolean loud) {
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xCCAAB7C4);
+        path.reset();
+        // Speaker cone
+        path.moveTo(cx - 5 * density, cy - 3 * density);
+        path.lineTo(cx - 2 * density, cy - 3 * density);
+        path.lineTo(cx + 2 * density, cy - 7 * density);
+        path.lineTo(cx + 2 * density, cy + 7 * density);
+        path.lineTo(cx - 2 * density, cy + 3 * density);
+        path.lineTo(cx - 5 * density, cy + 3 * density);
+        path.close();
+        c.drawPath(path, paint);
+
+        if (loud) {
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.5f * density);
+            rect.set(cx + 2 * density, cy - 6 * density, cx + 7 * density, cy + 6 * density);
+            c.drawArc(rect, -45, 90, false, paint);
             paint.setStyle(Paint.Style.FILL);
         }
     }

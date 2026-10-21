@@ -1,5 +1,27 @@
 # Release Notes — Music Screensaver
 
+## 0.1.6
+
+- **Authentic Vinyl Player Aesthetic (`home-assistant-vinyl-player`)**:
+  - **Prominent & Bright Album Art**: Fixed a paint alpha leak where the center label bitmap was inadvertently drawn with 7.8% opacity. Cover art is now rendered with 100% full vibrant contrast, bilinear filtering, and an expanded radius (44% of disc).
+  - **Photorealistic Drop Shadow**: Deep multi-pass feathered drop shadow beneath the vinyl disc, giving the appearance of floating above the card.
+  - **Realistic Tonearm & Stylus**: Modeled a sleek metallic gimbal pivot at top-right with tubular arm, angled cartridge headshell, and needle resting on the outer groove while playing, and resting lifted off the disc when paused.
+  - **Saturated Album-Tinted Matte Backdrop**: Dynamically samples highest-saturation color tones from album cover art to generate an elegant matte card background with soft lighting vignette.
+  - **Integrated Typography & Translucent Pill Controls**: Displays crisp white song title and muted artist name centered beneath the disc, alongside translucent circular playback pills (`|<<`, `||`, `>>|`) matching `home-assistant-vinyl-player`.
+  - **Smooth Volume Slider**: Interactive horizontal volume slider bar with speaker icons, filled progress track, and white knob thumb supporting real-time touch dragging.
+- **Organic Dancing Ferrofluid Overhaul (SPIROK ROBO / MagnePulse Inspired)**:
+  - **Illuminated Glass Porthole Chamber**: Encased the ferrofluid inside a sleek circular display cell featuring a metallic bezel frame, bright backlit white interior (or neon cyan/magenta), inner glass bevel shadow, and subtle front glass reflection arc.
+  - **Living Symbiote Blob Morphology**: Replaced the 28-spoke geometric "sea-urchin" star with an organic 6-harmonic fluid body governed by surface tension. Tentacles surge, stretch, and snap back organically to the beat with bulbous rounded tips (no straight vector stick lines).
+  - **Wet 3D Liquid Specular Highlights**: Natural spherical dome sheen and fluid glints conforming to the liquid blob curves.
+  - **Rayleigh-Plateau Liquid Beads**: High bass transients dynamically pinch off obsidian beads that hover near the glass wall before re-merging.
+- **Synchronized Lyrics Overhaul (lrclib.net Integration)**:
+  - If Home Assistant entity attributes do not provide synchronized lyrics, the plugin automatically queries the open-source `lrclib.net` database for live synced LRC lyrics in the background.
+  - Kinetic synchronized scrolling highlights the active singing line in bold cyan glow, while past and upcoming lines softly fade.
+  - Graceful fallback display with musical note and track info if a song is instrumental or has no lyrics found.
+- **Robust HA Proxy Artwork & Token Resolution**:
+  - Automatically resolves Home Assistant base URLs and authorization tokens from `FlutterSharedPreferences` or Music Assistant bridge, ensuring `/api/media_player_proxy/...` artwork loads reliably even behind authentication.
+  - Responsive vertical split on portrait displays for hybrid vinyl/ferrofluid modes.
+
 ## 0.1.5
 
 - **True Acoustic & Magnetic Ferrofluid Physics**:
