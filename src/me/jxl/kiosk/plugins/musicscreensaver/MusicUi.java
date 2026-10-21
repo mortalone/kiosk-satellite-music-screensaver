@@ -107,6 +107,6 @@ final class MusicUi {
 
         @Override public void setAlpha(int alpha) { p.setAlpha(alpha); }
         @Override public void setColorFilter(android.graphics.ColorFilter filter) { p.setColorFilter(filter); }
-        @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
+        @Override @SuppressWarnings("deprecation") public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
     }
 }

@@ -172,7 +172,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     }
 
     @Override
-    public void command(String id, Map<String, Object> arguments) {
+    public void execute(String id, Map<String, Object> arguments) {
         if ("show".equals(id)) {
             userDismissed = false;
             showOverlay();
@@ -196,6 +196,10 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             volumeControls = "Off".equals(volumeControls) ? "Buttons" : "Off";
             if (visualView != null) visualView.configure(effect, vinylStyle, ferrofluidColor, backgroundTheme, showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
         }
+    }
+
+    @Override
+    public void onEvent(String event, Map<String, Object> payload) {
     }
 
     private void setEffect(String newEffect) {
