@@ -1,0 +1,245 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": 1,
+  "id": "music-screensaver",
+  "name": "Music Screensaver",
+  "version": "0.1.0",
+  "minAndroidSdk": 26,
+  "entryClass": "me.jxl.kiosk.plugins.musicscreensaver.MusicScreensaverPlugin",
+  "description": "High-aesthetic music screensaver for Kiosk Satellite featuring rotating vinyl turntable, sound-reactive ferrofluid, Cotodama kinetic lyrics, and hybrid split-stage layouts with smart touch-dismiss.",
+  "author": "mortalone",
+  "license": "MIT",
+  "capabilities": [
+    "overlay",
+    "host.read",
+    "host.control",
+    "entities"
+  ],
+  "settings": [
+    {
+      "key": "speakerEntity",
+      "type": "entity",
+      "title": "Speaker / Medieafspiller",
+      "default": "",
+      "group": "Playback",
+      "description": "Music Assistant / HA media_player entity to follow (e.g. media_player.stueetagen_visualizer)."
+    },
+    {
+      "key": "startAutomatically",
+      "type": "boolean",
+      "title": "Start automatisk",
+      "default": true,
+      "group": "Playback",
+      "description": "Vis automatisk pausesk\u00e6rmen n\u00e5r musikafspilning starter."
+    },
+    {
+      "key": "onlyWhilePlaying",
+      "type": "boolean",
+      "title": "Kun under afspilning",
+      "default": true,
+      "group": "Playback",
+      "description": "Skjul pausesk\u00e6rmen og lad normal pausesk\u00e6rm (Fotoo/Nature) overtage n\u00e5r musikken er stoppet."
+    },
+    {
+      "key": "showPaused",
+      "type": "boolean",
+      "title": "Tillad p\u00e5 pause",
+      "default": true,
+      "group": "Playback",
+      "description": "Behold pausesk\u00e6rmen aktiv n\u00e5r afspilningen midlertidigt s\u00e6ttes p\u00e5 pause."
+    },
+    {
+      "key": "effect",
+      "type": "select",
+      "title": "Visualisering",
+      "default": "hybrid_vinyl",
+      "options": [
+        "hybrid_vinyl",
+        "hybrid_ferrofluid",
+        "vinyl",
+        "ferrofluid",
+        "cotodama"
+      ],
+      "group": "Appearance",
+      "description": "Hybrid Vinyl (Plade + Tekst), Hybrid Ferrofluid (V\u00e6ske + Tekst), Vinyl Spiller, Ferrofluid Magnetv\u00e6ske eller Cotodama Kinetiske Lyrics."
+    },
+    {
+      "key": "vinylStyle",
+      "type": "select",
+      "title": "Vinyl visning",
+      "default": "With Ambient Glow",
+      "options": [
+        "With Ambient Glow",
+        "Disc Only (Minimal)"
+      ],
+      "group": "Appearance",
+      "description": "With Ambient Glow tilf\u00f8jer dynamisk baggrundsgl\u00f8d fra coveret; Disc Only viser udelukkende den roterende plade p\u00e5 m\u00f8rk baggrund."
+    },
+    {
+      "key": "ferrofluidColor",
+      "type": "select",
+      "title": "Ferrofluid farve",
+      "default": "Obsidian Black",
+      "options": [
+        "Obsidian Black",
+        "Cyber Cyan",
+        "Neon Magenta",
+        "Album Matched"
+      ],
+      "group": "Appearance",
+      "description": "Farvetema for den magnetiske ferrofluid-dr\u00e5be."
+    },
+    {
+      "key": "backgroundTheme",
+      "type": "select",
+      "title": "Baggrundsstil",
+      "default": "Album Tinted",
+      "options": [
+        "Album Tinted",
+        "Pure Black",
+        "Deep Charcoal"
+      ],
+      "group": "Appearance",
+      "description": "Farvetone for pausesk\u00e6rmens baggrund."
+    },
+    {
+      "key": "showPlaybackControls",
+      "type": "boolean",
+      "title": "Vis afspilningsknapper",
+      "default": true,
+      "group": "Controls",
+      "description": "Vis Play/Pause, Forrige og N\u00e6ste knapper. Tryk p\u00e5 knapperne lukker ikke pausesk\u00e6rmen."
+    },
+    {
+      "key": "volumeControls",
+      "type": "select",
+      "title": "Lydstyrkekontrol",
+      "default": "Buttons",
+      "options": [
+        "Off",
+        "Buttons",
+        "Slider"
+      ],
+      "group": "Controls",
+      "description": "Kompakte minus/plus knapper, en slim slider eller sl\u00e5et fra."
+    },
+    {
+      "key": "tapDismiss",
+      "type": "boolean",
+      "title": "Tryk p\u00e5 baggrund lukker",
+      "default": true,
+      "group": "Controls",
+      "description": "Tryk hvor som helst p\u00e5 baggrunden lukker pausesk\u00e6rmen med det samme og viser dashboardet."
+    },
+    {
+      "key": "gain",
+      "type": "number",
+      "title": "Lydreaktiv styrke (gain)",
+      "default": 3,
+      "min": 1,
+      "max": 10,
+      "step": 1,
+      "group": "Performance",
+      "description": "Hvor kraftigt ferrofluid og lyrics reagerer p\u00e5 musikkens bas og lydspektrum."
+    },
+    {
+      "key": "refreshRate",
+      "type": "select",
+      "title": "Opdateringshastighed",
+      "default": "25 FPS Normal",
+      "options": [
+        "15 FPS Eco",
+        "25 FPS Normal",
+        "30 FPS Smooth"
+      ],
+      "group": "Performance",
+      "description": "Render-hastighed p\u00e5 Raspberry Pi 4. Eco bruger f\u00e6rre kurvepunkter."
+    },
+    {
+      "key": "overruleScreensaver",
+      "type": "boolean",
+      "title": "Overrule standard pausesk\u00e6rm",
+      "default": true,
+      "group": "Integration",
+      "description": "Holder Kiosk Satellite pausesk\u00e6rm og Fotoo i baggrunden mens der spilles musik."
+    },
+    {
+      "key": "visibilityEntity",
+      "type": "entity",
+      "title": "Synligheds-entitet (valgfri)",
+      "default": "",
+      "group": "Visibility",
+      "description": "Valgfri HA-entitet der styrer om pausesk\u00e6rmen m\u00e5 vises."
+    },
+    {
+      "key": "visibilityCondition",
+      "type": "select",
+      "title": "Synlighedsbetingelse",
+      "default": "Always",
+      "options": [
+        "Always",
+        "Active",
+        "Inactive",
+        "State equals",
+        "State not equals",
+        "Time between"
+      ],
+      "group": "Visibility",
+      "description": "Betingelse for visning (f.eks. Always eller Time between)."
+    },
+    {
+      "key": "visibilityValue",
+      "type": "string",
+      "title": "Betingelsesv\u00e6rdi",
+      "default": "",
+      "group": "Visibility",
+      "description": "V\u00e6rdi for betingelse, f.eks. on, playing eller 07:00-23:00."
+    }
+  ],
+  "commands": [
+    {
+      "id": "show",
+      "title": "Vis musik-pausesk\u00e6rm nu"
+    },
+    {
+      "id": "hide",
+      "title": "Luk musik-pausesk\u00e6rm"
+    },
+    {
+      "id": "effectVinyl",
+      "title": "Visualisering: Vinyl Spiller (gemt)"
+    },
+    {
+      "id": "effectFerrofluid",
+      "title": "Visualisering: Ferrofluid (gemt)"
+    },
+    {
+      "id": "effectCotodama",
+      "title": "Visualisering: Cotodama Lyrics (gemt)"
+    },
+    {
+      "id": "effectHybridVinyl",
+      "title": "Visualisering: Hybrid Vinyl + Lyrics (gemt)"
+    },
+    {
+      "id": "effectHybridFerrofluid",
+      "title": "Visualisering: Hybrid Ferrofluid + Lyrics (gemt)"
+    },
+    {
+      "id": "toggleControls",
+      "title": "Vis/skjul afspilningsknapper (gemt)"
+    },
+    {
+      "id": "toggleVolume",
+      "title": "Vis/skjul lydstyrkekontrol (gemt)"
+    }
+  ],
+  "groups": [
+    { "title": "Playback" },
+    { "title": "Appearance" },
+    { "title": "Controls" },
+    { "title": "Performance" },
+    { "title": "Integration" },
+    { "title": "Visibility" }
+  ]
+}
