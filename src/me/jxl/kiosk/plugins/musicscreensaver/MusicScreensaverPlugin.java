@@ -230,6 +230,41 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
     @Override
     public void onEvent(String event, Map<String, Object> payload) {
+        if (event != null && (event.equals("switch.active") || event.endsWith(".active") || event.endsWith(".aktiv"))) {
+            boolean turnOn = false;
+            if (payload != null) {
+                if (payload.get("on") instanceof Boolean) turnOn = (Boolean) payload.get("on");
+                else if (payload.get("value") instanceof Boolean) turnOn = (Boolean) payload.get("value");
+                else if ("on".equalsIgnoreCase(String.valueOf(payload.get("state")))) turnOn = true;
+            }
+            final boolean finalTurnOn = turnOn;
+            main.post(() -> {
+                if (finalTurnOn) {
+                    userDismissed = false;
+                    manualActive = true;
+                    bringKioskToFront();
+                    showOverlay();
+                } else {
+                    userDismissed = true;
+                    manualActive = false;
+                    hideOverlay();
+                }
+            });
+            return;
+        }
+
+        if (event != null && (event.equals("select.effect") || event.endsWith(".effect") || event.endsWith(".visualisering"))) {
+            if (payload != null) {
+                Object opt = payload.get("option");
+                if (opt == null) opt = payload.get("value");
+                if (opt != null) {
+                    final String effectName = String.valueOf(opt);
+                    main.post(() -> setEffect(effectName));
+                }
+            }
+            return;
+        }
+
         if ("ks.screensaver.state".equals(event) || "screensaver.state".equals(event)) {
             kioskScreensaverActive = Boolean.TRUE.equals(payload != null ? payload.get("active") : false);
             if (!kioskScreensaverActive) {

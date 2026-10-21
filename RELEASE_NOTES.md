@@ -1,5 +1,13 @@
 # Release Notes — Music Screensaver
 
+## 0.1.3
+
+- **Fixed HA Switch & Select Event Delivery (`onEvent`)**:
+  - Implemented event listener in `onEvent` for `switch.active` and `select.effect`. When toggling the switch in Home Assistant, Kiosk Satellite delivers state updates via `onEvent`, which previously was unhandled and caused the switch to immediately flip back to off.
+  - Turning the switch on in HA now unconditionally sets `manualActive = true`, immediately brings Kiosk Satellite to the front, and renders the music screensaver overlay.
+  - Handled `select.effect` events from HA so selecting visualizations from Home Assistant changes the effect instantly.
+  - Ferrofluid and Cotodama ambient effects now animate continuously even when playback is idle or paused.
+
 ## 0.1.2
 
 - **Direct Bidirectional HA Switch Control**:

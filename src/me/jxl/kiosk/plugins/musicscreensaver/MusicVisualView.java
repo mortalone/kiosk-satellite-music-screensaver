@@ -190,7 +190,7 @@ final class MusicVisualView extends View {
         // 4. Draw Controls
         drawControls(canvas, w, h);
 
-        if (playing) {
+        if (playing || "ferrofluid".equals(effect) || "hybrid_ferrofluid".equals(effect) || "cotodama".equals(effect)) {
             postInvalidateOnAnimation();
         }
     }
