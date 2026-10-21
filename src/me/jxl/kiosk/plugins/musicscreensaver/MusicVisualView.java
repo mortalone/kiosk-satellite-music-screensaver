@@ -136,8 +136,7 @@ final class MusicVisualView extends View {
             for (int y = 0; y < h; y += 2) {
                 for (int x = 0; x < w; x += 2) {
                     int p = blurredBg.getPixel(x, y);
-                    int r = (p >> 16) & 0xFF, g = (p >> 8) & 0xFF, b = p & 0xFF;
-                    Color.RGBToColor(r, g, b, hsv);
+                    Color.colorToHSV(p, hsv);
                     if (hsv[2] > 0.12f && hsv[2] < 0.95f && hsv[1] > maxSat) {
                         maxSat = hsv[1];
                         hsv[2] = Math.max(0.20f, Math.min(0.38f, hsv[2]));
