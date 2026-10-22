@@ -83,3 +83,11 @@ Vinyl style now also offers **Backlit Marble**, **Backlit Sunburst**, and **Back
 ### Individual word and letter entrances (0.1.14)
 
 Choose **Tekstanimation → Words Fly / Words Drop / Letters Assemble**, or **Random** to mix these with the four existing compositions. Letters Assemble uses character clusters for lines of up to 48 code points and words for longer lines. The entire phrase settles within at most 1.6 seconds (38% of the line interval for short intervals). Exact sung-word timing is not inferred. Untimed lyrics remain a labeled static excerpt after their entrance.
+
+### Music-reactive typography (0.1.15)
+
+In HA select **Tekstens musikreaktion → Fra / Diskret / Livlig**. Default is Diskret. The plugin command with that name cycles the same persisted choice. This avoids adding a 21st plugin setting.
+
+Stacked/Words Drop hop; Diagonal tilts; Serif/Contrast scale (Contrast also subtly thickens); Words Fly/Letters Assemble spread around the center. No reflow occurs on beats.
+
+Synchronization review: Twinkly's sendspin_source.py schedules timestamped frames against the Sendspin client clock. Spectrum Visualizer's publishDigitalFrame instead applies SpeakerSync's Sonos delay BEFORE broadcasting PARTY_AUDIO_FRAME. Its `at` value is dispatch elapsedRealtime, not a future playback deadline. The screensaver therefore must not apply the Sonos buffer again. It rejects demo/stale frames and ages pulses from dispatch. Lydsynkronisering exposes the producer's sync_status_summary (LOCKED/ESTIMATED/etc.); cached status is not proof of a current acoustic lock. Without upstream speaker synchronization, actual physical alignment remains unverified. Rendering and display scanout add latency; no acoustic calibration is claimed.

@@ -41,6 +41,7 @@ import org.json.JSONObject;
 
 public final class MusicScreensaverPlugin implements KioskPlugin {
     private PluginHost host;
+    private String lyricsReaction="Diskret";
     private Application.ActivityLifecycleCallbacks lifecycleCallbacks;
     private long lastOverlayAttempt;
     private String lastOverlayStatus="";
@@ -122,7 +123,9 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                     postponeKioskScreensaver();
                 }
                 notifyAudioPresentation();
-                if(visualView!=null)try{host.publishTextSensor("audio_status","Lyddata",visualView.audioStatus());}catch(Exception ignored){}
+                if(visualView!=null)try{host.publishTextSensor("audio_status","Lyddata",visualView.audioStatus());
+                    String sync=context.getSharedPreferences("spectrum_visualizer_preferences",Context.MODE_PRIVATE).getString("sync_status_summary","");
+                    host.publishTextSensor("audio_sync","Lydsynkronisering",sync.isEmpty()?"Ingen synkroniseringsstatus fra Spectrum Visualizer":sync);}catch(Exception ignored){}
             }
             main.postDelayed(this, 1000);
         }
@@ -139,6 +142,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             activeActivity = new WeakReference<>(current);
         }
 
+        if(context!=null)lyricsReaction=context.getSharedPreferences("music_screensaver_reaction",Context.MODE_PRIVATE).getString("mode","Diskret");
         configure(settings);
         registerLifecycle();
         registerAudioReceiver();
@@ -246,6 +250,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             Map<String,Object> copy=arguments==null?null:new HashMap<>(arguments);
             main.post(() -> {if(host!=null)execute(id,copy);});return;
         }
+        if("cycleLyricsReaction".equals(id)){setLyricsReaction("Fra".equals(lyricsReaction)?"Diskret":"Diskret".equals(lyricsReaction)?"Livlig":"Fra");return;}
         if ("active".equals(id) || "show".equals(id)) {
             boolean turnOn = arguments == null || !Boolean.FALSE.equals(arguments.get("value"));
             if (turnOn) {
@@ -283,6 +288,10 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
     @Override
     public void onEvent(String event, Map<String, Object> payload) {
+        if(event!=null&&(event.equals("select.lyrics_reaction")||event.endsWith(".lyrics_reaction"))&&payload!=null){
+            Object value=payload.get("option");if(value==null)value=payload.get("value");if(value==null)value=payload.get("state");
+            final String chosen=String.valueOf(value);main.post(() -> setLyricsReaction(chosen));return;
+        }
         if (event != null && (event.equals("switch.active") || event.endsWith(".active") || event.endsWith(".aktiv"))) {
             boolean turnOn = false;
             if (payload != null) {
@@ -332,6 +341,14 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         }
     }
 
+    private void setLyricsReaction(String value){
+        if(!"Fra".equals(value)&&!"Diskret".equals(value)&&!"Livlig".equals(value))return;
+        lyricsReaction=value;
+        if(context!=null)context.getSharedPreferences("music_screensaver_reaction",Context.MODE_PRIVATE).edit().putString("mode",value).apply();
+        if(lyricsView!=null)lyricsView.setMusicReaction(value);
+        publishState();
+    }
+
     private void setEffect(String newEffect) {
         if(effect.equals(newEffect))return;
         this.effect = newEffect;
@@ -354,6 +371,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             host.publishSelect("effect", "Visualisering",
                     new String[]{"hybrid_vinyl", "hybrid_ferrofluid", "vinyl", "ferrofluid", "cotodama"}, effect);
             host.publishSwitch("active", "Aktiv", isOverlayActive);
+            host.publishSelect("lyrics_reaction","Tekstens musikreaktion",new String[]{"Fra","Diskret","Livlig"},lyricsReaction);
         } catch (Throwable ignored) {}
     }
 
@@ -775,6 +793,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         if (hasLyrics) {
             lyricsView = new MusicLyricsView(act, isSplit);
             lyricsView.setStyle(lyricsStyle);
+            lyricsView.setMusicReaction(lyricsReaction);
             lyricsView.setStatus(lyricsStatus);
             lyricsView.setLyrics(lyrics);
             lyricsView.setTrackInfo(trackTitle, trackArtist);
@@ -988,9 +1007,12 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         audioReceiver = new BroadcastReceiver() {
             @Override public void onReceive(Context ctx, Intent intent) {
                 if (!isOverlayActive) return;
+                long now=SystemClock.elapsedRealtime();
+                long at=intent.getLongExtra("at",now);
+                if(!AudioFrameTiming.accept(intent.getBooleanExtra("demo",false),at,now))return;
                 float[] bands = intent.getFloatArrayExtra("bands");
                 if (visualView != null) visualView.acceptAudio(bands);
-                if (lyricsView != null) lyricsView.acceptAudio(bands);
+                if (lyricsView != null) lyricsView.acceptAudio(bands,at);
             }
         };
         IntentFilter filter = new IntentFilter("me.jxl.kiosk.plugins.PARTY_AUDIO_FRAME");

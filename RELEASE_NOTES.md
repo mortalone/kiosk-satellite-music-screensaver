@@ -1,5 +1,12 @@
 # Release Notes — Music Screensaver
 
+## 0.1.15
+
+- Add persisted HA select Tekstens musikreaktion: Fra, Diskret (default), Livlig. Kiosk command cycles the same setting without exceeding 20 settings.
+- Bass pulses drive style-specific hop, tilt, scale, subtle stroke weight or spread. Text remains in its existing line layout. Pausing clears the reaction.
+- Reuse Spectrum Visualizer's already delayed PARTY frames; do not add a second Sonos buffer. Timestamp the envelope at dispatch and reject demo frames and frames more than 250 ms old.
+- Expose Lydsynkronisering from Spectrum's measured/estimated synchronization status. Physical speaker-to-display timing is not verified by unit tests.
+
 ## 0.1.14
 
 - Add Words Fly, Words Drop and Letters Assemble lyric animations; include all in Random.

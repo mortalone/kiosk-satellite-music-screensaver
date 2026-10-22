@@ -73,6 +73,11 @@ public final class MusicScreensaverTest {
         check(LyricMotion.progress(.1f,4,5,1)==0,"Later words wait for stagger");
         check(LyricMotion.budget(20)<=1.6f,"Long lines cannot stretch entrance indefinitely");
 
+        check(AudioFrameTiming.accept(false,1000,1100),"Accept recent synchronized dispatch");
+        check(!AudioFrameTiming.accept(false,1000,1300),"Discard stale audio rather than play late beat");
+        check(!AudioFrameTiming.accept(true,1000,1000),"Demo must not masquerade as real music");
+        check(!AudioFrameTiming.accept(false,2000,1000),"Reject invalid future dispatch timestamp");
+
         System.out.println("MusicScreensaver unit tests passed successfully!");
     }
 

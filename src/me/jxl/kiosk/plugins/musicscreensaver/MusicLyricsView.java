@@ -24,6 +24,11 @@ final class MusicLyricsView extends View {
     private double position;
     private long anchor,changedAt,audioAt;
     private boolean playing;
+    private String musicReaction="Diskret";
+    private AudioEnvelope beat=new AudioEnvelope();
+    private float reaction;
+    void setMusicReaction(String value){musicReaction=value;invalidate();}
+
     private final ArrayList<float[]> pieces=new ArrayList<>();
     private float entranceBudget=1.2f;
     private boolean motionLetters;
@@ -40,9 +45,13 @@ final class MusicLyricsView extends View {
     MusicLyricsView(Context context,boolean split){super(context);this.split=split;setWillNotDraw(false);setContentDescription("Sangtekst");setClickable(false);}
     void setTrackInfo(String title,String artist){String value=(artist==null?"":artist+" · ")+(title==null?"":title);if(!value.equals(currentTrack)){currentTrack=value;if(lyrics.lines.isEmpty())compose();}}
     void setLyrics(MusicLyrics value){lyrics=value==null?new MusicLyrics(new ArrayList<>(),false):value;selected=-2;updatePosition(position);}
-    void setPlaying(boolean value){if(playing==value)return;position=elapsed();anchor=SystemClock.elapsedRealtime();playing=value;invalidate();}
+    void setPlaying(boolean value){if(playing==value)return;position=elapsed();anchor=SystemClock.elapsedRealtime();playing=value;if(!value){beat=new AudioEnvelope();reaction=0;}invalidate();}
     void updatePosition(double seconds){position=Math.max(0,seconds);anchor=SystemClock.elapsedRealtime();select();invalidate();}
-    void acceptAudio(float[] bands){float sum=0;int n=bands==null?0:Math.min(8,bands.length);for(int i=0;i<n;i++)if(!Float.isNaN(bands[i])&&!Float.isInfinite(bands[i]))sum+=Math.max(0,Math.min(1,bands[i]));energy=n==0?0:sum/n;audioAt=SystemClock.elapsedRealtime();invalidate();}
+    void acceptAudio(float[] bands,long at){
+        float sum=0;int n=bands==null?0:Math.min(6,bands.length);
+        for(int i=0;i<n;i++)if(Float.isFinite(bands[i]))sum+=Math.max(0,Math.min(1.8f,bands[i]));
+        energy=n==0?0:sum/n;audioAt=at;beat.feed(energy,at);invalidate();
+    }
     private double elapsed(){return position+(playing?Math.max(0,SystemClock.elapsedRealtime()-anchor)/1000.0:0);}
     private void select(){int next=lyrics.synced?lyrics.index(elapsed()):-1;if(next!=selected){selected=next;chooseStyle();changedAt=SystemClock.elapsedRealtime();compose();}}
     @Override protected void onSizeChanged(int w,int h,int oldw,int oldh){compose();}
@@ -102,7 +111,7 @@ final class MusicLyricsView extends View {
     private void drawPieces(Canvas c,float age){
         StaticLayout layout=blocks[0];
         float x=(getWidth()-blockWidth)/2,y=(getHeight()-totalHeight)*.48f;
-        if(age>=entranceBudget||pieces.size()>96){
+        if((age>=entranceBudget&&!(reaction>.005f&&(style==4||style==6)))||pieces.size()>96){
             c.save();c.translate(x,y);layout.getPaint().setAlpha(255);layout.draw(c);c.restore();return;
         }
         for(int i=0;i<pieces.size();i++){
@@ -112,7 +121,7 @@ final class MusicLyricsView extends View {
             float[] p=pieces.get(i);float cx=(p[0]+p[2])/2,cy=(p[1]+p[3])/2;
             float dx=style==5?0:((i%2==0)?-1:1)*getWidth()*(motionLetters?.12f:.20f)*remaining;
             float dy=(style==5?-1:(i%3==0?-1:1))*Math.min(getHeight()*.16f,80)*remaining;
-            c.save();c.translate(x+dx,y+dy);
+            c.save();c.translate(x+dx+(cx-blockWidth*.5f)*reaction*.08f,y+dy);
             c.rotate((i%2==0?-1:1)*(motionLetters?35:12)*remaining,cx,cy);
             float scale=1-(motionLetters?.4f:.16f)*remaining;c.scale(scale,scale,cx,cy);
             c.clipRect(p[0],p[1],p[2],p[3]);
@@ -124,6 +133,16 @@ final class MusicLyricsView extends View {
         if(blocks.length==0)return;
         long now=SystemClock.elapsedRealtime();float age=(now-changedAt)/1000f;
         float y=(getHeight()-totalHeight)*.48f;
+        reaction=playing&&!"Fra".equals(musicReaction)?beat.pulse(now)*("Livlig".equals(musicReaction)?1f:.4f):0;
+        c.save();
+        float centerX=getWidth()*.5f,centerY=getHeight()*.48f;
+        if(style==1||style==5)c.translate(0,-getHeight()*.035f*reaction);
+        else if(style==2)c.rotate(3.5f*reaction,centerX,centerY);
+        else if(style==0||style==3)c.scale(1+.075f*reaction,1+.075f*reaction,centerX,centerY);
+        for(StaticLayout block:blocks){
+            block.getPaint().setStyle(style==3&&reaction>.02f?android.graphics.Paint.Style.FILL_AND_STROKE:android.graphics.Paint.Style.FILL);
+            block.getPaint().setStrokeWidth(block.getPaint().getTextSize()*.018f*reaction);
+        }
         if(style>=4){
             float motionAge=lyrics.synced&&selected>=0?(float)Math.max(0,elapsed()-lyrics.lines.get(selected).at):age;
             drawPieces(c,motionAge);
@@ -137,11 +156,12 @@ final class MusicLyricsView extends View {
             c.save();c.clipRect(0,0,getWidth(),getHeight());
             c.translate(x+(style==2?(i%2==0?-slide:slide):0),y+slide);
             if(style==2)c.rotate(-4,blockWidth*.5f,heights[i]*.5f);
-            float pulse=now-audioAt<500?energy*.008f:0;
+            float pulse=0;
             c.scale(1+pulse,1+pulse,blockWidth*.5f,heights[i]*.5f);
             blocks[i].getPaint().setAlpha((int)(255*ease));blocks[i].draw(c);c.restore();y+=heights[i];
         }
         }
+        c.restore();
         ink.setColor(0xFFB7B8BC);ink.setTextSize(Math.min(14*getResources().getDisplayMetrics().scaledDensity,getWidth()*.035f));ink.setTextAlign(android.graphics.Paint.Align.CENTER);
         if(!lyrics.synced)c.drawText(lyrics.lines.isEmpty()?status:"Tekst uden tidskoder",getWidth()/2f,getHeight()*.94f,ink);
         if(isShown()&&(playing||age<Math.max(1,entranceBudget)))postInvalidateDelayed(40);
