@@ -16,6 +16,11 @@ public final class MusicScreensaverTest {
         MusicLyrics plain = MusicLyrics.parse("", "Line 1\nLine 2\nLine 3");
         check(!plain.synced && plain.lines.size() == 3, "Plain lyrics fallback");
 
+        check(MusicLyrics.sameName("Don't Go", "Don’t Go"),"Normalize typographic apostrophes in lyric lookup");
+        check(!MusicLyrics.sameName("Song", "Song Live"),"Do not silently match another version");
+        MusicLyrics entityPlain=MusicLyrics.parse("First line", "First line");
+        check(!entityPlain.lines.isEmpty()&&!entityPlain.synced,"Preserve untimed entity lyrics");
+
         // Test 3: Null and empty handling
         MusicLyrics empty = MusicLyrics.parse(null, null);
         check(!empty.synced && empty.lines.isEmpty(), "Empty lyrics handling");

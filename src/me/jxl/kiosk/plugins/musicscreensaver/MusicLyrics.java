@@ -69,6 +69,9 @@ final class MusicLyrics {
         return low;
     }
 
+    static boolean sameName(String a,String b){return normalize(a).equals(normalize(b));}
+    private static String normalize(String value){return value==null?"":java.text.Normalizer.normalize(value,java.text.Normalizer.Form.NFKC).toLowerCase(java.util.Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]", "");}
+
     private static String bounded(String s) {
         return s == null || "null".equals(s) ? "" : s.substring(0, Math.min(65536, s.length()));
     }

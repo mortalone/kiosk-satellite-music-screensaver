@@ -3,7 +3,7 @@
   "apiVersion": 1,
   "id": "music-screensaver",
   "name": "Music Screensaver",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "minAndroidSdk": 26,
   "entryClass": "me.jxl.kiosk.plugins.musicscreensaver.MusicScreensaverPlugin",
   "description": "High-aesthetic music screensaver for Kiosk Satellite featuring rotating vinyl turntable, sound-reactive ferrofluid, Cotodama kinetic lyrics, and hybrid split-stage layouts with smart touch-dismiss.",
@@ -27,7 +27,7 @@
     {
       "key": "activationMode",
       "type": "select",
-      "title": "Hvorn\u00e5r skal den aktiveres?",
+      "title": "Hvornår skal den aktiveres?",
       "default": "When screensaver starts",
       "options": [
         "When screensaver starts",
@@ -35,7 +35,7 @@
         "Manual / HA switch only"
       ],
       "group": "Playback",
-      "description": "'When screensaver starts' venter p\u00e5 Kiosk Satellites pausesk\u00e6rm-tid eller manuel aktivering. 'Immediately when playing' viser den straks ved musik."
+      "description": "'When screensaver starts' venter på Kiosk Satellites pauseskærm-tid eller manuel aktivering. 'Immediately when playing' viser den straks ved musik."
     },
     {
       "key": "onlyWhilePlaying",
@@ -43,15 +43,15 @@
       "title": "Kun under afspilning",
       "default": true,
       "group": "Playback",
-      "description": "Skjul pausesk\u00e6rmen og lad normal pausesk\u00e6rm (Fotoo/Nature) overtage n\u00e5r musikken er stoppet."
+      "description": "Skjul pauseskærmen og lad normal pauseskærm (Fotoo/Nature) overtage når musikken er stoppet."
     },
     {
       "key": "showPaused",
       "type": "boolean",
-      "title": "Tillad p\u00e5 pause",
+      "title": "Tillad på pause",
       "default": true,
       "group": "Playback",
-      "description": "Behold pausesk\u00e6rmen aktiv n\u00e5r afspilningen midlertidigt s\u00e6ttes p\u00e5 pause."
+      "description": "Behold pauseskærmen aktiv når afspilningen midlertidigt sættes på pause."
     },
     {
       "key": "effect",
@@ -66,7 +66,7 @@
         "cotodama"
       ],
       "group": "Appearance",
-      "description": "Hybrid Vinyl (Plade + Tekst), Hybrid Ferrofluid (V\u00e6ske + Tekst), Vinyl Spiller, Ferrofluid Magnetv\u00e6ske eller Cotodama Kinetiske Lyrics."
+      "description": "Hybrid Vinyl (Plade + Tekst), Hybrid Ferrofluid (Væske + Tekst), Vinyl Spiller, Ferrofluid Magnetvæske eller Cotodama Kinetiske Lyrics."
     },
     {
       "key": "vinylStyle",
@@ -75,10 +75,11 @@
       "default": "With Ambient Glow",
       "options": [
         "With Ambient Glow",
-        "Disc Only (Minimal)"
+        "Disc Only (Minimal)",
+        "Backlit Splatter"
       ],
       "group": "Appearance",
-      "description": "With Ambient Glow tilf\u00f8jer dynamisk baggrundsgl\u00f8d fra coveret; Disc Only viser udelukkende den roterende plade p\u00e5 m\u00f8rk baggrund."
+      "description": "Klassisk plade, minimal plade eller gennemlyst splatter-vinyl inspireret af Vylumi."
     },
     {
       "key": "ferrofluidColor",
@@ -92,7 +93,7 @@
         "Album Matched"
       ],
       "group": "Appearance",
-      "description": "Farvetema for den magnetiske ferrofluid-dr\u00e5be."
+      "description": "Farvetema for den magnetiske ferrofluid-dråbe."
     },
     {
       "key": "backgroundTheme",
@@ -105,7 +106,7 @@
         "Deep Charcoal"
       ],
       "group": "Appearance",
-      "description": "Farvetone for pausesk\u00e6rmens baggrund."
+      "description": "Farvetone for pauseskærmens baggrund."
     },
     {
       "key": "showPlaybackControls",
@@ -113,7 +114,7 @@
       "title": "Vis afspilningsknapper",
       "default": true,
       "group": "Controls",
-      "description": "Vis Play/Pause, Forrige og N\u00e6ste knapper. Tryk p\u00e5 knapperne lukker ikke pausesk\u00e6rmen."
+      "description": "Vis Play/Pause, Forrige og Næste knapper. Tryk på knapperne lukker ikke pauseskærmen."
     },
     {
       "key": "volumeControls",
@@ -126,15 +127,15 @@
         "Slider"
       ],
       "group": "Controls",
-      "description": "Kompakte minus/plus knapper, en slim slider eller sl\u00e5et fra."
+      "description": "Kompakte minus/plus knapper, en slim slider eller slået fra."
     },
     {
       "key": "tapDismiss",
       "type": "boolean",
-      "title": "Tryk p\u00e5 baggrund lukker",
+      "title": "Tryk på baggrund lukker",
       "default": true,
       "group": "Controls",
-      "description": "Tryk hvor som helst p\u00e5 baggrunden lukker pausesk\u00e6rmen med det samme og viser dashboardet."
+      "description": "Tryk hvor som helst på baggrunden lukker pauseskærmen med det samme og viser dashboardet."
     },
     {
       "key": "gain",
@@ -145,7 +146,7 @@
       "max": 10,
       "step": 1,
       "group": "Performance",
-      "description": "Hvor kraftigt ferrofluid og lyrics reagerer p\u00e5 musikkens bas og lydspektrum."
+      "description": "Hvor kraftigt ferrofluid og lyrics reagerer på musikkens bas og lydspektrum."
     },
     {
       "key": "refreshRate",
@@ -158,15 +159,15 @@
         "30 FPS Smooth"
       ],
       "group": "Performance",
-      "description": "Render-hastighed p\u00e5 Raspberry Pi 4. Eco bruger f\u00e6rre kurvepunkter."
+      "description": "Render-hastighed på Raspberry Pi 4. Eco bruger færre kurvepunkter."
     },
     {
       "key": "overruleScreensaver",
       "type": "boolean",
-      "title": "Overrule standard pausesk\u00e6rm",
+      "title": "Overrule standard pauseskærm",
       "default": true,
       "group": "Integration",
-      "description": "Holder Kiosk Satellite pausesk\u00e6rm og Fotoo i baggrunden mens der spilles musik."
+      "description": "Holder Kiosk Satellite pauseskærm og Fotoo i baggrunden mens der spilles musik."
     },
     {
       "key": "visibilityEntity",
@@ -174,7 +175,7 @@
       "title": "Synligheds-entitet (valgfri)",
       "default": "",
       "group": "Visibility",
-      "description": "Valgfri HA-entitet der styrer om pausesk\u00e6rmen m\u00e5 vises."
+      "description": "Valgfri HA-entitet der styrer om pauseskærmen må vises."
     },
     {
       "key": "visibilityCondition",
@@ -195,20 +196,61 @@
     {
       "key": "visibilityValue",
       "type": "string",
-      "title": "Betingelsesv\u00e6rdi",
+      "title": "Betingelsesværdi",
       "default": "",
       "group": "Visibility",
-      "description": "V\u00e6rdi for betingelse, f.eks. on, playing eller 07:00-23:00."
+      "description": "Værdi for betingelse, f.eks. on, playing eller 07:00-23:00."
+    },
+    {
+      "key": "fluidQuality",
+      "type": "select",
+      "title": "Ferrofluid detaljegrad",
+      "default": "High",
+      "options": [
+        "Eco",
+        "High",
+        "Ultra"
+      ],
+      "group": "Performance",
+      "description": "Eco: 192, High: 384, Ultra: 640 pixels. Ultra kræver mere regnekraft."
+    },
+    {
+      "key": "lyricsStyle",
+      "type": "select",
+      "title": "Tekstanimation",
+      "default": "Random",
+      "options": [
+        "Random",
+        "Serif",
+        "Stacked",
+        "Diagonal",
+        "Contrast"
+      ],
+      "group": "Appearance",
+      "description": "Tilfældig komposition ved hver ny tekstlinje eller en fast stil."
+    },
+    {
+      "key": "vinylLight",
+      "type": "select",
+      "title": "Gennemlyst vinyl: lys",
+      "default": "Music",
+      "options": [
+        "Music",
+        "Flow",
+        "Album"
+      ],
+      "group": "Appearance",
+      "description": "Musikreaktion, roligt farveflow eller albumfarver. Bruges med Backlit Splatter."
     }
   ],
   "commands": [
     {
       "id": "show",
-      "title": "Vis musik-pausesk\u00e6rm nu"
+      "title": "Vis musik-pauseskærm nu"
     },
     {
       "id": "hide",
-      "title": "Luk musik-pausesk\u00e6rm"
+      "title": "Luk musik-pauseskærm"
     },
     {
       "id": "effectVinyl",
@@ -240,11 +282,23 @@
     }
   ],
   "groups": [
-    { "title": "Playback" },
-    { "title": "Appearance" },
-    { "title": "Controls" },
-    { "title": "Performance" },
-    { "title": "Integration" },
-    { "title": "Visibility" }
+    {
+      "title": "Playback"
+    },
+    {
+      "title": "Appearance"
+    },
+    {
+      "title": "Controls"
+    },
+    {
+      "title": "Performance"
+    },
+    {
+      "title": "Integration"
+    },
+    {
+      "title": "Visibility"
+    }
   ]
 }

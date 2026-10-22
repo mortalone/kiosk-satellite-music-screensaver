@@ -12,12 +12,14 @@ final class FluidRenderer {
     private float[] field;
     private int[] pixels;
     private int size;
+    private int quality=384;
+    void setQuality(String value){quality="Ultra".equals(value)?640:"Eco".equals(value)?192:384;}
     private RadialGradient cavity;
     private float oldCx,oldCy,oldR;
     private int oldColor;
     void step(float dt,float bass,float mid,float treble){model.step(dt,bass,mid,treble);}
     void draw(Canvas c,float cx,float cy,float r,boolean economy,int tint) {
-        int n=economy?96:144;
+        int n=quality;
         if(n!=size){size=n;bitmap=Bitmap.createBitmap(n,n,Bitmap.Config.ARGB_8888);field=new float[n*n];pixels=new int[n*n];}
         // Broad light fades into the scene: no bezel, outline, or front glass wedge.
         if(cavity==null||oldCx!=cx||oldCy!=cy||oldR!=r||oldColor!=tint){
@@ -31,7 +33,7 @@ final class FluidRenderer {
         for(int y=0;y<n;y++)for(int x=0;x<n;x++)field[y*n+x]=model.field(x*scale-1,y*scale-1);
         for(int y=1;y<n-1;y++)for(int x=1;x<n-1;x++) {
             int k=y*n+x;float f=field[k];
-            float edge=Math.max(0,Math.min(1,(f-.94f)/.13f));
+            float edge=Math.max(0,Math.min(1,(f-(1f-6f/n))/(12f/n)));
             if(edge<=0){pixels[k]=0;continue;}
             float gx=(field[k+1]-field[k-1])*.5f,gy=(field[k+n]-field[k-n])*.5f;
             float len=(float)Math.sqrt(gx*gx+gy*gy+.00001f);

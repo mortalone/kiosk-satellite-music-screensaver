@@ -24,16 +24,23 @@ final class MusicLyricsView extends View {
     private double position;
     private long anchor,changedAt,audioAt;
     private boolean playing;
-    private String currentTrack="";
+    private String currentTrack="", status="Henter sangtekst…", chosenStyle="Random";
+    private final java.util.Random random=new java.util.Random();
+    void setStatus(String value){status=value;invalidate();}
+    void setStyle(String value){chosenStyle=value;chooseStyle();compose();}
+    private void chooseStyle(){
+        if("Random".equals(chosenStyle)){style=(style+1+random.nextInt(3))%4;}
+        else style="Stacked".equals(chosenStyle)?1:"Diagonal".equals(chosenStyle)?2:"Contrast".equals(chosenStyle)?3:0;
+    }
 
-    MusicLyricsView(Context context,boolean split){super(context);this.split=split;setContentDescription("Sangtekst");setClickable(false);}
+    MusicLyricsView(Context context,boolean split){super(context);this.split=split;setWillNotDraw(false);setContentDescription("Sangtekst");setClickable(false);}
     void setTrackInfo(String title,String artist){String value=(artist==null?"":artist+" · ")+(title==null?"":title);if(!value.equals(currentTrack)){currentTrack=value;if(lyrics.lines.isEmpty())compose();}}
     void setLyrics(MusicLyrics value){lyrics=value==null?new MusicLyrics(new ArrayList<>(),false):value;selected=-2;updatePosition(position);}
     void setPlaying(boolean value){if(playing==value)return;position=elapsed();anchor=SystemClock.elapsedRealtime();playing=value;invalidate();}
     void updatePosition(double seconds){position=Math.max(0,seconds);anchor=SystemClock.elapsedRealtime();select();invalidate();}
     void acceptAudio(float[] bands){float sum=0;int n=bands==null?0:Math.min(8,bands.length);for(int i=0;i<n;i++)if(!Float.isNaN(bands[i])&&!Float.isInfinite(bands[i]))sum+=Math.max(0,Math.min(1,bands[i]));energy=n==0?0:sum/n;audioAt=SystemClock.elapsedRealtime();invalidate();}
     private double elapsed(){return position+(playing?Math.max(0,SystemClock.elapsedRealtime()-anchor)/1000.0:0);}
-    private void select(){int next=lyrics.synced?lyrics.index(elapsed()):-1;if(next!=selected){selected=next;changedAt=SystemClock.elapsedRealtime();compose();}}
+    private void select(){int next=lyrics.synced?lyrics.index(elapsed()):-1;if(next!=selected){selected=next;chooseStyle();changedAt=SystemClock.elapsedRealtime();compose();}}
     @Override protected void onSizeChanged(int w,int h,int oldw,int oldh){compose();}
     private void compose(){
         if(getWidth()<1||getHeight()<1)return;
@@ -43,7 +50,7 @@ final class MusicLyricsView extends View {
         else if(selected<0)text="♪";
         else text=lyrics.lines.get(selected).text.trim();
         if(text.isEmpty())text="♪";
-        style=(text.hashCode()&0x7fffffff)%4;
+
         String[] words=text.split("\\s+");
         int groups=style==0?1:Math.min(style==1?3:style==2?4:2,words.length);
         blocks=new StaticLayout[groups];
@@ -87,7 +94,7 @@ final class MusicLyricsView extends View {
             blocks[i].getPaint().setAlpha((int)(255*ease));blocks[i].draw(c);c.restore();y+=heights[i];
         }
         ink.setColor(0xFFB7B8BC);ink.setTextSize(Math.min(14*getResources().getDisplayMetrics().scaledDensity,getWidth()*.035f));ink.setTextAlign(android.graphics.Paint.Align.CENTER);
-        if(!lyrics.synced)c.drawText(lyrics.lines.isEmpty()?"Afventer sangtekst":"Tekst uden tidskoder",getWidth()/2f,getHeight()*.94f,ink);
+        if(!lyrics.synced)c.drawText(lyrics.lines.isEmpty()?status:"Tekst uden tidskoder",getWidth()/2f,getHeight()*.94f,ink);
         if(isShown()&&(playing||age<1))postInvalidateDelayed(40);
     }
 }

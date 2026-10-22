@@ -1,5 +1,14 @@
 # Release Notes — Music Screensaver
 
+## 0.1.8
+
+- Increase ferrofluid surface detail from 144 to 384 pixels by default, with Eco 192 and Ultra 640 options; scale edge smoothing with resolution.
+- Preserve plain HA lyrics, discard outdated lookup responses after track changes, include album metadata and add a conservative LRCLIB search fallback. Show lookup failures/no-result/instrumental states instead of waiting forever.
+- Add lyric composition selection: Random, Serif, Stacked, Diagonal, Contrast. Random avoids immediately repeating the same composition.
+- Add Backlit Splatter vinyl style and Music, Flow or Album lighting. Stationary procedural pigment with moving illumination and album label, inspired by the supplied Vylumi clip. No tonearm in this style.
+- Observe Android Dream start/stop events and retain the music session when Kiosk's own screensaver is dismissed. Keep the screen awake while the visible music overlay overrides screensavers. Bringing the app forward remains subject to Android background-launch restrictions; this cannot forcibly stop another app's DreamService.
+- Device rendering, frame rate and native Fotoo takeover still require on-device verification.
+
 ## 0.1.7 — first reference-driven revision
 
 - Replace fixed six-lobe contour and orbital dots with viscous moving masses and a mergeable implicit surface.

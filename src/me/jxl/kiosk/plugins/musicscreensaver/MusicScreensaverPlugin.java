@@ -85,7 +85,10 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
     private MusicLyrics lyrics = MusicLyrics.parse("", "");
     private String lyricsTrackKey = "";
-    private boolean lyricsPending = false;
+    private BroadcastReceiver dreamReceiver;
+    private boolean nativeDreaming, musicScreensaverSession;
+    private int lyricsGeneration;
+    private String lyricsStatus="Henter sangtekst…", lyricsStyle="Random", fluidQuality="High", vinylLight="Music";
 
     private FrameLayout rootContainer;
     private MusicVisualView visualView;
@@ -133,6 +136,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         configure(settings);
         registerLifecycle();
         registerAudioReceiver();
+        registerDreamReceiver();
 
         // Retrieve HA base URL from Kiosk host or FlutterSharedPreferences
         host.executeCommand("getDashboardState", Collections.emptyMap(), (ok, data, error) -> {
@@ -161,12 +165,14 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
     @Override
     public synchronized void stop() {
+        lyricsGeneration++;
         main.removeCallbacksAndMessages(null);
         notifyAudioPresentationOff();
         if (audioReceiver != null && context != null) {
             try { context.unregisterReceiver(audioReceiver); } catch (Throwable ignored) {}
             audioReceiver = null;
         }
+        if(dreamReceiver!=null&&context!=null){try{context.unregisterReceiver(dreamReceiver);}catch(Exception ignored){}dreamReceiver=null;}
         hideOverlay();
         if (ioPool != null) {
             ioPool.shutdownNow();
@@ -184,6 +190,9 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         showPaused = bool(settings, "showPaused", true);
         effect = str(settings, "effect", "hybrid_vinyl");
         vinylStyle = str(settings, "vinylStyle", "With Ambient Glow");
+        lyricsStyle=str(settings,"lyricsStyle","Random");
+        fluidQuality=str(settings,"fluidQuality","High");
+        vinylLight=str(settings,"vinylLight","Music");
         ferrofluidColor = str(settings, "ferrofluidColor", "Obsidian Black");
         backgroundTheme = str(settings, "backgroundTheme", "Album Tinted");
         showPlaybackControls = bool(settings, "showPlaybackControls", true);
@@ -200,7 +209,10 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             visualView.configure(effect, vinylStyle, ferrofluidColor, backgroundTheme,
                     showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
             visualView.setVolumeLevel(currentVolume);
+            visualView.setFluidQuality(fluidQuality);
+            visualView.setVinylLight(vinylLight);
         }
+        if (lyricsView!=null) lyricsView.setStyle(lyricsStyle);
         if (isOverlayActive) notifyAudioPresentation();
         publishState();
     }
@@ -345,6 +357,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         if (vol instanceof Number) {
             this.currentVolume = ((Number) vol).floatValue();
             if (visualView != null) visualView.setVolumeLevel(currentVolume);
+            visualView.setFluidQuality(fluidQuality);
+            visualView.setVinylLight(vinylLight);
         }
 
         Object queue = attrs.get("active_queue");
@@ -393,64 +407,65 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     }
 
     private void fetchLyrics(Map<?, ?> attrs, String artist, String title, String album, double duration) {
-        if (ioPool == null || lyricsPending) return;
-        lyricsPending = true;
+        if(ioPool==null)return;
+        final int generation=++lyricsGeneration;
+        lyrics=MusicLyrics.parse("", "");lyricsStatus="Henter sangtekst…";
+        if(lyricsView!=null){lyricsView.setLyrics(lyrics);lyricsView.setStatus(lyricsStatus);}
         ioPool.execute(() -> {
-            MusicLyrics parsed = null;
-            // 1. Check local entity attributes
-            String[] keys = {"lyrics", "lrc", "song_lyrics", "media_lyrics"};
-            for (String k : keys) {
-                Object val = attrs.get(k);
-                if (val instanceof String && !((String) val).trim().isEmpty()) {
-                    parsed = MusicLyrics.parse((String) val, "");
-                    if (!parsed.lines.isEmpty()) break;
+            MusicLyrics parsed=null;String status="Ingen sangtekst fundet";
+            try {
+                for(String key:new String[]{"lyrics","lrc","song_lyrics","media_lyrics"}) {
+                    Object value=attrs.get(key);
+                    if(value instanceof String){parsed=MusicLyrics.parse((String)value,(String)value);if(!parsed.lines.isEmpty())break;}
                 }
-            }
-
-            // 2. Query open synchronized lyrics database (lrclib.net)
-            if ((parsed == null || parsed.lines.isEmpty()) && !title.isEmpty() && !artist.isEmpty()) {
-                try {
-                    String query = "https://lrclib.net/api/get?artist_name=" + URLEncoder.encode(artist, "UTF-8")
-                            + "&track_name=" + URLEncoder.encode(title, "UTF-8");
-                    if (duration > 15) {
-                        query += "&duration=" + Math.round(duration);
-                    }
-                    URL url = new URL(query);
-                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                    conn.setConnectTimeout(5000);
-                    conn.setReadTimeout(5000);
-                    conn.setRequestProperty("User-Agent", "KioskSatellite-MusicScreensaver/0.1.6");
-                    if (conn.getResponseCode() == 200) {
-                        try (InputStream in = conn.getInputStream();
-                             ByteArrayOutputStream bout = new ByteArrayOutputStream()) {
-                            byte[] buf = new byte[4096];
-                            int r;
-                            while ((r = in.read(buf)) != -1) bout.write(buf, 0, r);
-                            String jsonStr = bout.toString("UTF-8");
-                            JSONObject obj = new JSONObject(jsonStr);
-                            String synced = obj.optString("syncedLyrics", "");
-                            String plain = obj.optString("plainLyrics", "");
-                            if (!synced.isEmpty() || !plain.isEmpty()) {
-                                parsed = MusicLyrics.parse(synced, plain);
+                if((parsed==null||parsed.lines.isEmpty())&&!title.isEmpty()&&!artist.isEmpty()) {
+                    String query="artist_name="+URLEncoder.encode(artist,"UTF-8")+"&track_name="+URLEncoder.encode(title,"UTF-8");
+                    String body=lyricsRequest("https://lrclib.net/api/get?"+query+"&album_name="+URLEncoder.encode(album,"UTF-8")+"&duration="+Math.round(duration));
+                    JSONObject item=body==null?null:new JSONObject(body);
+                    if(item==null) {
+                        String result=lyricsRequest("https://lrclib.net/api/search?"+query);
+                        if(result!=null){
+                            org.json.JSONArray candidates=new org.json.JSONArray(result);
+                            double best=Double.MAX_VALUE;
+                            for(int i=0;i<candidates.length();i++){
+                                JSONObject candidate=candidates.getJSONObject(i);
+                                if(!MusicLyrics.sameName(title,candidate.optString("trackName"))||!MusicLyrics.sameName(artist,candidate.optString("artistName")))continue;
+                                double delta=duration>0?Math.abs(duration-candidate.optDouble("duration",0)):0;
+                                if(duration>0&&delta>8)continue;
+                                double score=delta+(candidate.optString("syncedLyrics","").isEmpty()?100:0);
+                                if(score<best){best=score;item=candidate;}
                             }
                         }
                     }
-                } catch (Throwable ignored) {}
-            }
-
-            final MusicLyrics finalLyrics = (parsed != null && !parsed.lines.isEmpty())
-                    ? parsed : MusicLyrics.parse("", "");
-            main.post(() -> {
-                lyricsPending = false;
-                lyrics = finalLyrics;
-                if (lyricsView != null) {
-                    lyricsView.setLyrics(lyrics);
-                    lyricsView.setTrackInfo(trackTitle, trackArtist);
-            lyricsView.setPlaying("playing".equalsIgnoreCase(playerState));
-            lyricsView.updatePosition(estimatedPosition());
+                    if(item!=null){
+                        parsed=MusicLyrics.parse(item.optString("syncedLyrics",""),item.optString("plainLyrics",""));
+                        if(item.optBoolean("instrumental",false))status="Instrumentalt nummer";
+                    }
                 }
+            }catch(Exception error){status="Sangtekst kunne ikke hentes – prøver igen ved næste nummer";}
+            final MusicLyrics result=parsed==null?MusicLyrics.parse("", ""):parsed;
+            final String message=status;
+            main.post(() -> {
+                if(generation!=lyricsGeneration||host==null)return;
+                lyrics=result;lyricsStatus=message;
+                if(lyricsView!=null){lyricsView.setLyrics(lyrics);lyricsView.setStatus(lyricsStatus);lyricsView.setTrackInfo(trackTitle,trackArtist);lyricsView.setPlaying("playing".equalsIgnoreCase(playerState));lyricsView.updatePosition(estimatedPosition());}
             });
         });
+    }
+
+    private String lyricsRequest(String url) throws Exception {
+        HttpURLConnection conn=(HttpURLConnection)new URL(url).openConnection();
+        try {
+            conn.setConnectTimeout(5000);conn.setReadTimeout(5000);
+            conn.setRequestProperty("User-Agent","KioskSatellite-MusicScreensaver/0.1.8");
+            int code=conn.getResponseCode();if(code==404)return null;
+            if(code!=200)throw new java.io.IOException("Lyrics HTTP "+code);
+            try(InputStream in=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
+                byte[] buffer=new byte[4096];int count;
+                while((count=in.read(buffer))!=-1){out.write(buffer,0,count);if(out.size()>2097152)throw new java.io.IOException("Lyrics response too large");}
+                return out.toString("UTF-8");
+            }
+        }finally{conn.disconnect();}
     }
 
     private String resolveHaBaseUrl() {
@@ -579,7 +594,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             if ("Immediately when playing".equals(activationMode)) {
                 shouldShow = musicEligible;
             } else if ("When screensaver starts".equals(activationMode)) {
-                shouldShow = kioskScreensaverActive && musicEligible;
+                shouldShow = (kioskScreensaverActive || nativeDreaming || musicScreensaverSession) && musicEligible;
             } else if ("Manual / HA switch only".equals(activationMode)) {
                 shouldShow = false;
             }
@@ -593,6 +608,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     }
 
     private void showOverlay() {
+        musicScreensaverSession=true;
         bringKioskToFront();
         isOverlayActive = true;
         publishState();
@@ -614,6 +630,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     }
 
     private void hideOverlay() {
+        musicScreensaverSession=false;
         isOverlayActive = false;
         notifyAudioPresentationOff();
         if (rootContainer != null) {
@@ -642,6 +659,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
         rootContainer = new FrameLayout(act);
         rootContainer.setBackgroundColor(0xFF0D1014);
+        rootContainer.setKeepScreenOn(overruleScreensaver);
 
         DisplayMetrics dm = act.getResources().getDisplayMetrics();
         boolean isPortrait = dm.heightPixels >= dm.widthPixels;
@@ -653,6 +671,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         visualView.configure(effect, vinylStyle, ferrofluidColor, backgroundTheme,
                 showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
         visualView.setVolumeLevel(currentVolume);
+            visualView.setFluidQuality(fluidQuality);
+            visualView.setVinylLight(vinylLight);
         visualView.updateTrack(trackTitle, trackArtist, currentCover, "playing".equalsIgnoreCase(playerState), estimatedPosition());
         visualView.setListener(new MusicVisualView.Listener() {
             @Override public void onPlayPause() {
@@ -684,6 +704,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             @Override public void onVolumeSet(float fraction) {
                 currentVolume = Math.max(0f, Math.min(1f, fraction));
                 if (visualView != null) visualView.setVolumeLevel(currentVolume);
+            visualView.setFluidQuality(fluidQuality);
+            visualView.setVinylLight(vinylLight);
                 int level = Math.round(currentVolume * 100f);
                 String targetQueue = (activeQueueId != null && !activeQueueId.isEmpty()) ? activeQueueId : speakerEntity;
                 if (!targetQueue.isEmpty()) {
@@ -711,6 +733,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         // 2. Lyrics View
         if (hasLyrics) {
             lyricsView = new MusicLyricsView(act, isSplit);
+            lyricsView.setStyle(lyricsStyle);
+            lyricsView.setStatus(lyricsStatus);
             lyricsView.setLyrics(lyrics);
             lyricsView.setTrackInfo(trackTitle, trackArtist);
             lyricsView.setPlaying("playing".equalsIgnoreCase(playerState));
@@ -801,6 +825,18 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         } catch (Throwable ignored) {
             return null;
         }
+    }
+
+    private void registerDreamReceiver(){
+        if(context==null)return;
+        dreamReceiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent intent){
+            nativeDreaming=Intent.ACTION_DREAMING_STARTED.equals(intent.getAction());
+            if(nativeDreaming&&isOverlayActive&&overruleScreensaver)bringKioskToFront();
+            main.post(MusicScreensaverPlugin.this::updatePresentation);
+        }};
+        IntentFilter filter=new IntentFilter();filter.addAction(Intent.ACTION_DREAMING_STARTED);filter.addAction(Intent.ACTION_DREAMING_STOPPED);
+        if(Build.VERSION.SDK_INT>=33)context.registerReceiver(dreamReceiver,filter,Context.RECEIVER_EXPORTED);
+        else context.registerReceiver(dreamReceiver,filter);
     }
 
     private void bringKioskToFront() {

@@ -58,6 +58,9 @@ final class MusicVisualView extends View {
     private float smoothedTreble = 0;
     private long lastPhysicsTime = 0;
 
+    private final BacklitVinylRenderer backlit = new BacklitVinylRenderer();
+    void setFluidQuality(String value){fluid.setQuality(value);invalidate();}
+    void setVinylLight(String value){backlit.mode=value;invalidate();}
     private final FluidRenderer fluid = new FluidRenderer();
     // Interactive hit rects
     private final RectF prevRect = new RectF();
@@ -329,6 +332,8 @@ final class MusicVisualView extends View {
         float cy = isPortrait ? h * 0.36f : h * 0.44f;
         float discR = isPortrait ? Math.min(w * 0.41f, h * 0.25f) : Math.min(w * (split ? 0.20f : 0.34f), h * 0.36f);
         if (discR <= 10) return;
+
+        if("Backlit Splatter".equals(vinylStyle)){backlit.draw(c,cx,cy,discR,cover,dominantColor,elapsed,bass);return;}
 
         boolean withGlow = !"Disc Only (Minimal)".equals(vinylStyle);
 
