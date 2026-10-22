@@ -1,5 +1,10 @@
 # Release Notes — Music Screensaver
 
+## 0.1.9
+
+- Refine the new backlit vinyl texture with irregular, smoothly warped pigment islands instead of periodic grain.
+- Includes the 0.1.8 improvements below.
+
 ## 0.1.8
 
 - Increase ferrofluid surface detail from 144 to 384 pixels by default, with Eco 192 and Ultra 640 options; scale edge smoothing with resolution.

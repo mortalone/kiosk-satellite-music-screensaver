@@ -15,16 +15,24 @@ final class BacklitVinylRenderer {
     private final float[] hsv={0,.78f,1};
     private int lastPalette;
     private float oldX,oldY;
+    private static double hash(int x,int y){int h=x*374761393+y*668265263;h=(h^(h>>>13))*1274126177;return ((h^(h>>>16))&0x7fffffff)/2147483647.0;}
+    private static double noise(double x,double y){
+        int ix=(int)Math.floor(x),iy=(int)Math.floor(y);double fx=x-ix,fy=y-iy;
+        fx=fx*fx*(3-2*fx);fy=fy*fy*(3-2*fy);
+        double top=hash(ix,iy)*(1-fx)+hash(ix+1,iy)*fx;
+        double bottom=hash(ix,iy+1)*(1-fx)+hash(ix+1,iy+1)*fx;
+        return top*(1-fy)+bottom*fy;
+    }
     private void texture(){
         int n=640;int[] pixels=new int[n*n];
         for(int y=0;y<n;y++)for(int x=0;x<n;x++){
             double px=(x-n*.5)/(n*.5),py=(y-n*.5)/(n*.5),r=Math.hypot(px,py),a=Math.atan2(py,px);
             if(r>1)continue;
-            double warp=Math.sin(px*9+Math.sin(py*11))*1.8+Math.sin(py*7-px*5);
-            double veins=Math.sin(a*67+warp+r*22)+.6*Math.sin(a*113-r*47+warp*2);
-            double flecks=Math.sin(px*155+warp*3)*Math.sin(py*137-warp*4)+.5*Math.sin(px*293+py*181);
-            double density=.5+.22*veins+.32*flecks;
-            int alpha=(int)Math.max(15,Math.min(245,128+density*95));
+            double warp=noise(px*5+10,py*5+10)*2;
+            double veins=noise(px*13+warp,py*13-warp);
+            double flecks=.65*noise(px*87+warp*4,py*87-warp*4)+.35*noise(px*169,py*169);
+            double density=(flecks-.47)*9+(veins-.5)*1.8;
+            int alpha=(int)Math.max(8,Math.min(245,120+density*190));
             if(r>.95)alpha=Math.max(alpha,(int)(150+(r-.95)*1500));
             pixels[y*n+x]=(alpha<<24)|0x101321;
         }
