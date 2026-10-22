@@ -1,5 +1,10 @@
 # Release Notes — Music Screensaver
 
+## 0.1.11
+
+- Fix a startup/hidden-overlay crash when HA reports volume before a MusicVisualView exists. Remove unrelated quality/lighting updates from both volume handlers; apply them only when creating/configuring the view.
+- Add a focused regression harness that executes the production volume-update block with a missing view, a live view, and a view removed between updates.
+
 ## 0.1.10
 
 - Rebuild lyric layout when changing visualization in plugin settings while the overlay is open; previously only the background renderer changed.

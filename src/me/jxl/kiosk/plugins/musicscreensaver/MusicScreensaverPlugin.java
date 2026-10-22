@@ -363,8 +363,6 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         if (vol instanceof Number) {
             this.currentVolume = ((Number) vol).floatValue();
             if (visualView != null) visualView.setVolumeLevel(currentVolume);
-            visualView.setFluidQuality(fluidQuality);
-            visualView.setVinylLight(vinylLight);
         }
 
         Object queue = attrs.get("active_queue");
@@ -678,8 +676,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         visualView.configure(effect, vinylStyle, ferrofluidColor, backgroundTheme,
                 showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
         visualView.setVolumeLevel(currentVolume);
-            visualView.setFluidQuality(fluidQuality);
-            visualView.setVinylLight(vinylLight);
+        visualView.setFluidQuality(fluidQuality);
+        visualView.setVinylLight(vinylLight);
         visualView.updateTrack(trackTitle, trackArtist, currentCover, "playing".equalsIgnoreCase(playerState), estimatedPosition());
         visualView.setListener(new MusicVisualView.Listener() {
             @Override public void onPlayPause() {
@@ -711,8 +709,6 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             @Override public void onVolumeSet(float fraction) {
                 currentVolume = Math.max(0f, Math.min(1f, fraction));
                 if (visualView != null) visualView.setVolumeLevel(currentVolume);
-            visualView.setFluidQuality(fluidQuality);
-            visualView.setVinylLight(vinylLight);
                 int level = Math.round(currentVolume * 100f);
                 String targetQueue = (activeQueueId != null && !activeQueueId.isEmpty()) ? activeQueueId : speakerEntity;
                 if (!targetQueue.isEmpty()) {

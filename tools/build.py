@@ -43,6 +43,8 @@ if not build_tools:
     raise SystemExit("Install Android build-tools (for example 35.0.0).")
 d8 = build_tools[-1]
 
+subprocess.run(["python3", str(ROOT / "tools/test_volume_lifecycle.py")], check=True)
+
 out = ROOT / "dist"
 out.mkdir(exist_ok=True)
 
