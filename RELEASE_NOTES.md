@@ -1,5 +1,10 @@
 # Release Notes — Music Screensaver
 
+## 0.1.10
+
+- Rebuild lyric layout when changing visualization in plugin settings while the overlay is open; previously only the background renderer changed.
+- Includes all 0.1.8 and 0.1.9 improvements below.
+
 ## 0.1.9
 
 - Refine the new backlit vinyl texture with irregular, smoothly warped pigment islands instead of periodic grain.

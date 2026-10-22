@@ -184,6 +184,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     @Override
     public synchronized void configure(Map<String, Object> settings) {
         if (settings == null) return;
+        String previousEffect=effect;
         speakerEntity = str(settings, "speakerEntity", "");
         activationMode = str(settings, "activationMode", "When screensaver starts");
         onlyWhilePlaying = bool(settings, "onlyWhilePlaying", true);
@@ -212,6 +213,11 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             visualView.setFluidQuality(fluidQuality);
             visualView.setVinylLight(vinylLight);
         }
+        if(rootContainer!=null)rootContainer.setKeepScreenOn(overruleScreensaver);
+        if(isOverlayActive&&!previousEffect.equals(effect))main.post(() -> {
+            if(!isOverlayActive)return;
+            Activity activity=activeKioskActivity();if(activity!=null)rebuildOverlayViews(activity);
+        });
         if (lyricsView!=null) lyricsView.setStyle(lyricsStyle);
         if (isOverlayActive) notifyAudioPresentation();
         publishState();
@@ -666,6 +672,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         boolean isSplit = !isPortrait && ("hybrid_vinyl".equals(effect) || "hybrid_ferrofluid".equals(effect));
         boolean hasLyrics = isLyricsEffect();
 
+        lyricsView=null;
         // 1. Visualizer View
         visualView = new MusicVisualView(act);
         visualView.configure(effect, vinylStyle, ferrofluidColor, backgroundTheme,
