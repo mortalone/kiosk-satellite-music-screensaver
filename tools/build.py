@@ -45,6 +45,8 @@ d8 = build_tools[-1]
 
 subprocess.run(["python3", str(ROOT / "tools/test_volume_lifecycle.py")], check=True)
 
+subprocess.run(["python3", str(ROOT / "tools/test_overlay_retry.py")], check=True)
+
 out = ROOT / "dist"
 out.mkdir(exist_ok=True)
 

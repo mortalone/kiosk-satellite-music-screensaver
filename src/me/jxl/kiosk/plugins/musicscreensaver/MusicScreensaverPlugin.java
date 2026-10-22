@@ -41,6 +41,9 @@ import org.json.JSONObject;
 
 public final class MusicScreensaverPlugin implements KioskPlugin {
     private PluginHost host;
+    private Application.ActivityLifecycleCallbacks lifecycleCallbacks;
+    private long lastOverlayAttempt;
+    private String lastOverlayStatus="";
     private Context context;
     private final Handler main = new Handler(Looper.getMainLooper());
     private ExecutorService ioPool;
@@ -169,6 +172,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     @Override
     public synchronized void stop() {
         lyricsGeneration++;
+        if(context instanceof Application&&lifecycleCallbacks!=null){((Application)context).unregisterActivityLifecycleCallbacks(lifecycleCallbacks);lifecycleCallbacks=null;}
         main.removeCallbacksAndMessages(null);
         notifyAudioPresentationOff();
         if (audioReceiver != null && context != null) {
@@ -176,7 +180,12 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             audioReceiver = null;
         }
         if(dreamReceiver!=null&&context!=null){try{context.unregisterReceiver(dreamReceiver);}catch(Exception ignored){}dreamReceiver=null;}
-        hideOverlay();
+        if(Looper.myLooper()==Looper.getMainLooper())hideOverlay();
+        else {
+            final FrameLayout oldRoot=rootContainer;
+            isOverlayActive=false;musicScreensaverSession=false;rootContainer=null;visualView=null;lyricsView=null;
+            main.post(() -> {if(oldRoot!=null&&oldRoot.getParent() instanceof android.view.ViewGroup)((android.view.ViewGroup)oldRoot.getParent()).removeView(oldRoot);});
+        }
         if (ioPool != null) {
             ioPool.shutdownNow();
             ioPool = null;
@@ -187,6 +196,10 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     @Override
     public synchronized void configure(Map<String, Object> settings) {
         if (settings == null) return;
+        if(Looper.myLooper()!=Looper.getMainLooper()){
+            Map<String,Object> copy=new HashMap<>(settings);
+            main.post(() -> {if(host!=null)configure(copy);});return;
+        }
         savedSettings.clear();savedSettings.putAll(settings);
         String previousEffect=effect;
         speakerEntity = str(settings, "speakerEntity", "");
@@ -229,6 +242,10 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
     @Override
     public void execute(String id, Map<String, Object> arguments) {
+        if(Looper.myLooper()!=Looper.getMainLooper()){
+            Map<String,Object> copy=arguments==null?null:new HashMap<>(arguments);
+            main.post(() -> {if(host!=null)execute(id,copy);});return;
+        }
         if ("active".equals(id) || "show".equals(id)) {
             boolean turnOn = arguments == null || !Boolean.FALSE.equals(arguments.get("value"));
             if (turnOn) {
@@ -612,6 +629,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
         if (shouldShow) {
             if (!isOverlayActive) showOverlay();
+            else ensureOverlayAttached();
         } else {
             if (isOverlayActive) hideOverlay();
         }
@@ -624,24 +642,38 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         publishState();
         notifyAudioPresentation();
 
-        Activity act = activeKioskActivity();
-        if (act != null && !act.isFinishing() && (Build.VERSION.SDK_INT < 17 || !act.isDestroyed())) {
-            rebuildOverlayViews(act);
-            postponeKioskScreensaver();
-        } else {
-            main.postDelayed(() -> {
-                Activity retry = activeKioskActivity();
-                if (retry != null && !retry.isFinishing()) {
-                    rebuildOverlayViews(retry);
-                    postponeKioskScreensaver();
-                }
-            }, 300);
+        lastOverlayAttempt=0;
+        ensureOverlayAttached();
+    }
+
+    private void overlayStatus(String message){
+        if(message.equals(lastOverlayStatus)||host==null)return;
+        lastOverlayStatus=message;
+        try{host.publishTextSensor("overlay_status","Visningsstatus",message);host.log("Music overlay: "+message);}catch(Exception ignored){}
+    }
+
+    private void ensureOverlayAttached(){
+        if(!isOverlayActive||host==null)return;
+        Activity activity=activeKioskActivity();
+        if(rootContainer!=null&&rootContainer.isAttachedToWindow()&&rootContainer.isShown()){
+            rootContainer.bringToFront();
+            overlayStatus(activity!=null&&activity.hasWindowFocus()?"Overlay oprettet · Kiosk i forgrunden":"Overlay oprettet · Kiosk uden fokus (fx Fotoo)");
+            return;
         }
+        long now=SystemClock.elapsedRealtime();
+        if(now-lastOverlayAttempt<1000)return;
+        lastOverlayAttempt=now;
+        if(activity==null){overlayStatus("Venter på Kiosk-vindue – åbn Kiosk på skærmen");return;}
+        rebuildOverlayViews(activity);
+        if(rootContainer!=null&&rootContainer.getParent()!=null){
+            postponeKioskScreensaver();overlayStatus("Overlay oprettet – afventer synlighed");
+        }else overlayStatus("Venter på Kiosk-visning");
     }
 
     private void hideOverlay() {
         musicScreensaverSession=false;
         isOverlayActive = false;
+        overlayStatus("Slukket");
         notifyAudioPresentationOff();
         if (rootContainer != null) {
             try {
@@ -664,7 +696,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         if (!(content instanceof FrameLayout)) return;
 
         if (rootContainer != null) {
-            ((FrameLayout) content).removeView(rootContainer);
+            if(rootContainer.getParent() instanceof android.view.ViewGroup)((android.view.ViewGroup)rootContainer.getParent()).removeView(rootContainer);
         }
 
         rootContainer = new FrameLayout(act);
@@ -968,10 +1000,10 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
     private void registerLifecycle() {
         if (context instanceof Application) {
-            ((Application) context).registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
+            lifecycleCallbacks=new Application.ActivityLifecycleCallbacks() {
                 @Override public void onActivityResumed(Activity activity) {
                     activeActivity = new WeakReference<>(activity);
-                    if (isOverlayActive || manualActive) {
+                    if (host!=null && (isOverlayActive || manualActive)) {
                         rebuildOverlayViews(activity);
                         postponeKioskScreensaver();
                     }
@@ -986,7 +1018,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                         activeActivity.clear();
                     }
                 }
-            });
+            };
+            ((Application)context).registerActivityLifecycleCallbacks(lifecycleCallbacks);
         }
     }
 

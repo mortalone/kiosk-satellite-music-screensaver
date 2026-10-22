@@ -1,5 +1,13 @@
 # Release Notes — Music Screensaver
 
+## 0.1.13
+
+- Retry attaching a requested overlay on subsequent ticks instead of abandoning it after one 300 ms attempt.
+- Add Visningsstatus with separate waiting, attached, and window-focus states. Active still represents the requested music session; focus does not prove physical visibility.
+- Run configuration and command-driven UI changes on Android's main thread.
+- Remove overlays from their actual parent and unregister lifecycle listeners on stop; prevent stopped instances rebuilding views after plugin reload.
+- On-device activation and Fotoo foreground restrictions still need verification. Restart Kiosk once after updating to clear listeners retained by older versions.
+
 ## 0.1.12
 
 - Fix playback time rewinding on repeated HA snapshots. Respect media_position_updated_at, pause/resume, seeking and track changes. This affects timed lyrics and vinyl light motion.
