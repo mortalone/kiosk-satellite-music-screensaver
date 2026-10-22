@@ -106,6 +106,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             updatePresentation();
             if (isOverlayActive) {
                 if (lyricsView != null && isLyricsEffect()) {
+                    lyricsView.setPlaying("playing".equalsIgnoreCase(playerState));
                     lyricsView.updatePosition(estimatedPosition());
                 }
                 if (overruleScreensaver && SystemClock.elapsedRealtime() - lastScreensaverPostpone > 12000) {
@@ -380,6 +381,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         }
         if (lyricsView != null) {
             lyricsView.setTrackInfo(trackTitle, trackArtist);
+            lyricsView.setPlaying("playing".equalsIgnoreCase(playerState));
+            lyricsView.updatePosition(estimatedPosition());
         }
 
         // Fetch lyrics if track changed
@@ -443,6 +446,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                 if (lyricsView != null) {
                     lyricsView.setLyrics(lyrics);
                     lyricsView.setTrackInfo(trackTitle, trackArtist);
+            lyricsView.setPlaying("playing".equalsIgnoreCase(playerState));
+            lyricsView.updatePosition(estimatedPosition());
                 }
             });
         });
@@ -708,6 +713,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             lyricsView = new MusicLyricsView(act, isSplit);
             lyricsView.setLyrics(lyrics);
             lyricsView.setTrackInfo(trackTitle, trackArtist);
+            lyricsView.setPlaying("playing".equalsIgnoreCase(playerState));
+            lyricsView.updatePosition(estimatedPosition());
 
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-1, -1);
             if (isSplit) {

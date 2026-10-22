@@ -7,8 +7,8 @@ A high-aesthetic, hardware-accelerated music screensaver and ambient now-playing
 ## Features
 
 - **Vinyl Player**: Realistic 33⅓ RPM rotating vinyl turntable with circular cropped album artwork as the center label, concentric rille micro-grooves, rotating anisotropic sheen reflection, brass spindle hole, and bass-reactive backlight glow.
-- **Ferrofluid**: Sound-reactive magnetic liquid blob reacting dynamically to real-time FFT audio bands with Rosensweig spikes, liquid obsidian depth, specular glossy highlights, and beat-activated satellite micro-droplets.
-- **Cotodama Kinetic Lyrics**: Animated typography inspired by the *Cotodama Lyric Speaker*, synchronizing live to Music Assistant LRC lyrics with bass energy scale pulsing and glowing text shadows.
+- **Ferrofluid**: Sound-reactive magnetic liquid blob reacting dynamically to real-time FFT audio bands using moving viscous masses and a shaded implicit surface that can merge and separate. A soft illuminated cavity replaces the bezel. This is a visual approximation, not a physical ferrofluid solver.
+- **Cotodama Kinetic Lyrics**: Animated typography inspired by the *Cotodama Lyric Speaker*, synchronizing live to Music Assistant LRC lyrics as one phrase at a time in four automatically varied typographic compositions. Line timestamps control phrase changes; word entrances are stylistic, not word-level karaoke.
 - **Hybrid Split-Stage**: Split landscape widescreen view showing the visual hero (Vinyl or Ferrofluid) on the left side with live kinetic synchronized lyrics on the right side.
 - **Smart Screensaver Overrule**:
   - Overrules default screensavers (Fotoo / Nature Frame) while music is playing.
@@ -16,9 +16,10 @@ A high-aesthetic, hardware-accelerated music screensaver and ambient now-playing
 - **Touch-Friendly Controls**:
   - Tapping playback or volume controls operates the queue without dismissing the screensaver.
   - Tapping anywhere on the canvas or background dismisses the screensaver immediately and returns directly to your Home Assistant dashboard.
-- **Smooth 25–30 FPS on Raspberry Pi 4**:
-  - Built with pure Android hardware-accelerated 2D Canvas routines.
-  - Zero per-frame memory allocation for stutter-free playback without garbage collection spikes.
+- **Rendering budget**: Ferrofluid reuses a 144×144 surface texture (96×96 in Eco mode). Device FPS and thermals still need measurement; no Raspberry Pi performance guarantee.
+- **Honest audio fallback**: Without live FFT frames, the fluid relaxes and shows “Afventer live lyddata”. It does not invent a beat. Real reactivity requires the existing Spectrum Visualizer audio feed.
+
+See [visual direction and acceptance checks](docs/VISUAL_DIRECTION.md) for the reference analysis and remaining device validation.
 
 ## Installation
 

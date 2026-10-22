@@ -2,125 +2,92 @@
 package me.jxl.kiosk.plugins.musicscreensaver;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.SystemClock;
-import android.view.Gravity;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.TextView;
+import android.text.Layout;
+import android.text.StaticLayout;
+import android.text.TextPaint;
+import android.view.View;
 import java.util.ArrayList;
-import java.util.List;
 
-final class MusicLyricsView extends ScrollView {
-    private final LinearLayout rows;
-    private final List<TextView> labels = new ArrayList<>();
-    private MusicLyrics lyrics = new MusicLyrics(new ArrayList<>(), false);
-    private int selected = -2;
+/** Phrase-based kinetic typography. LRC line timestamps are not word timestamps. */
+final class MusicLyricsView extends View {
+    private MusicLyrics lyrics=new MusicLyrics(new ArrayList<>(),false);
     private final boolean split;
-    private long lastPulse;
-    private int windowStart;
-    private String currentTrack = "";
+    private final TextPaint ink=new TextPaint(3);
+    private StaticLayout[] blocks=new StaticLayout[0];
+    private final float[] heights=new float[8];
+    private int selected=-2,style;
+    private float totalHeight,blockWidth,energy;
+    private double position;
+    private long anchor,changedAt,audioAt;
+    private boolean playing;
+    private String currentTrack="";
 
-    MusicLyricsView(Context context, boolean split) {
-        super(context);
-        this.split = split;
-        setFillViewport(true);
-        setClipToPadding(false);
-        setVerticalScrollBarEnabled(false);
-        rows = new LinearLayout(context);
-        rows.setOrientation(LinearLayout.VERTICAL);
-        int leftPad = split ? MusicUi.dp(context, 20) : MusicUi.dp(context, 32);
-        int rightPad = split ? MusicUi.dp(context, 20) : MusicUi.dp(context, 32);
-        rows.setPadding(leftPad, MusicUi.dp(context, 80), rightPad, MusicUi.dp(context, 120));
-        addView(rows, new ScrollView.LayoutParams(-1, -2));
-        setContentDescription("Sangtekst");
-    }
-
-    void setTrackInfo(String title, String artist) {
-        this.currentTrack = (artist != null && !artist.isEmpty()) ? (artist + " – " + title) : (title != null ? title : "");
-        if (lyrics.lines.isEmpty()) {
-            rebuild();
-        }
-    }
-
-    void setLyrics(MusicLyrics value) {
-        this.lyrics = value == null ? new MusicLyrics(new ArrayList<>(), false) : value;
-        this.selected = -2;
-        rebuild();
-    }
-
-    private void rebuild() {
-        rows.removeAllViews();
-        labels.clear();
-        if (lyrics.lines.isEmpty()) {
-            TextView icon = MusicUi.text(getContext(), "♪", split ? 38 : 44, MusicUi.ACCENT);
-            icon.setGravity(split ? Gravity.START : Gravity.CENTER);
-            icon.setPadding(0, MusicUi.dp(getContext(), 40), 0, MusicUi.dp(getContext(), 12));
-            rows.addView(icon);
-
-            String status = currentTrack.isEmpty() ? "Lytter efter sangtekst..." : ("Spiller: " + currentTrack);
-            TextView empty = MusicUi.text(getContext(), status, split ? 20 : 22, MusicUi.INK);
-            empty.setGravity(split ? Gravity.START : Gravity.CENTER);
-            rows.addView(empty);
-
-            TextView hint = MusicUi.text(getContext(), "Synkroniserede tekster vises automatisk n\u00e5r de er tilg\u00e6ngelige", split ? 14 : 15, MusicUi.MUTED);
-            hint.setGravity(split ? Gravity.START : Gravity.CENTER);
-            hint.setPadding(0, MusicUi.dp(getContext(), 8), 0, 0);
-            rows.addView(hint);
-            return;
-        }
-        windowStart = 0;
-        int end = Math.min(lyrics.lines.size(), 500);
-        for (int i = 0; i < end; i++) {
-            String text = lyrics.lines.get(i).text;
-            TextView t = MusicUi.text(getContext(), text.isEmpty() ? "♪" : text, split ? 24 : 28,
-                    lyrics.synced ? MusicUi.MUTED : MusicUi.INK);
-            t.setGravity(split ? Gravity.START : Gravity.CENTER);
-            t.setAlpha(lyrics.synced ? 0.35f : 0.95f);
-            t.setPadding(0, MusicUi.dp(getContext(), split ? 10 : 12), 0, MusicUi.dp(getContext(), split ? 10 : 12));
-            rows.addView(t);
-            labels.add(t);
-        }
-    }
-
-    void updatePosition(double seconds) {
-        if (!lyrics.synced || labels.isEmpty()) return;
-        int next = lyrics.index(seconds);
-        if (next == selected) return;
-        selected = next;
-        for (int i = 0; i < labels.size(); i++) {
-            boolean active = (i + windowStart) == next;
-            TextView t = labels.get(i);
-            t.setAlpha(active ? 1.0f : 0.35f);
-            t.setScaleX(1.0f);
-            t.setScaleY(1.0f);
-            t.setShadowLayer(active ? 14f : 0f, 0, 0, 0x9965E5CF);
-            t.setTextColor(active ? MusicUi.ACCENT : MusicUi.MUTED);
-            t.setTypeface(active ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
-        }
-        if (next >= windowStart && next - windowStart < labels.size()) {
-            TextView target = labels.get(next - windowStart);
-            post(() -> smoothScrollTo(0, Math.max(0, target.getTop() - getHeight() / 3)));
-        }
-    }
-
-    void acceptAudio(float[] bands) {
-        if (!lyrics.synced || selected < windowStart || selected - windowStart >= labels.size()) return;
-        long now = SystemClock.elapsedRealtime();
-        if (now - lastPulse < 60) return;
-        lastPulse = now;
-        float energy = 0;
-        int count = bands == null ? 0 : Math.min(8, bands.length);
-        for (int i = 0; i < count; i++) {
-            if (!Float.isNaN(bands[i]) && !Float.isInfinite(bands[i])) {
-                energy += Math.max(0, Math.min(1, bands[i]));
+    MusicLyricsView(Context context,boolean split){super(context);this.split=split;setContentDescription("Sangtekst");setClickable(false);}
+    void setTrackInfo(String title,String artist){String value=(artist==null?"":artist+" · ")+(title==null?"":title);if(!value.equals(currentTrack)){currentTrack=value;if(lyrics.lines.isEmpty())compose();}}
+    void setLyrics(MusicLyrics value){lyrics=value==null?new MusicLyrics(new ArrayList<>(),false):value;selected=-2;updatePosition(position);}
+    void setPlaying(boolean value){if(playing==value)return;position=elapsed();anchor=SystemClock.elapsedRealtime();playing=value;invalidate();}
+    void updatePosition(double seconds){position=Math.max(0,seconds);anchor=SystemClock.elapsedRealtime();select();invalidate();}
+    void acceptAudio(float[] bands){float sum=0;int n=bands==null?0:Math.min(8,bands.length);for(int i=0;i<n;i++)if(!Float.isNaN(bands[i])&&!Float.isInfinite(bands[i]))sum+=Math.max(0,Math.min(1,bands[i]));energy=n==0?0:sum/n;audioAt=SystemClock.elapsedRealtime();invalidate();}
+    private double elapsed(){return position+(playing?Math.max(0,SystemClock.elapsedRealtime()-anchor)/1000.0:0);}
+    private void select(){int next=lyrics.synced?lyrics.index(elapsed()):-1;if(next!=selected){selected=next;changedAt=SystemClock.elapsedRealtime();compose();}}
+    @Override protected void onSizeChanged(int w,int h,int oldw,int oldh){compose();}
+    private void compose(){
+        if(getWidth()<1||getHeight()<1)return;
+        String text;
+        if(lyrics.lines.isEmpty())text=currentTrack.isEmpty()?"♪":currentTrack;
+        else if(!lyrics.synced)text=lyrics.lines.get(0).text; // No invented timed scrolling.
+        else if(selected<0)text="♪";
+        else text=lyrics.lines.get(selected).text.trim();
+        if(text.isEmpty())text="♪";
+        style=(text.hashCode()&0x7fffffff)%4;
+        String[] words=text.split("\\s+");
+        int groups=style==0?1:Math.min(style==1?3:style==2?4:2,words.length);
+        blocks=new StaticLayout[groups];
+        blockWidth=getWidth()*(style==2?.72f:.82f);
+        float size=Math.min(getWidth()*(split?.10f:.105f),getHeight()*.14f);
+        // Fit the complete phrase before animating. Never discard words to obtain a layout.
+        for(int attempt=0;attempt<20;attempt++){
+            totalHeight=0;
+            for(int i=0;i<groups;i++){
+                int from=i*words.length/groups,to=(i+1)*words.length/groups;
+                StringBuilder part=new StringBuilder();for(int j=from;j<to;j++){if(j>from)part.append(' ');part.append(words[j]);}
+                TextPaint p=new TextPaint(3);p.setColor(Color.WHITE);
+                p.setTypeface(Typeface.create(style==0||style==2?"serif":"sans-serif-condensed",(style==1||i==groups-1)?Typeface.BOLD:Typeface.NORMAL));
+                p.setTextSize(size*(style==3&&i==1?1.5f:1));
+                blocks[i]=StaticLayout.Builder.obtain(part,0,part.length(),p,Math.max(1,(int)blockWidth))
+                    .setAlignment(style==0?Layout.Alignment.ALIGN_CENTER:style==2&&i%2==1?Layout.Alignment.ALIGN_OPPOSITE:Layout.Alignment.ALIGN_NORMAL)
+                    .setIncludePad(false).setLineSpacing(size*.1f,1).build();
+                heights[i]=blocks[i].getHeight()+size*.18f;totalHeight+=heights[i];
             }
+            if(totalHeight<=getHeight()*.7f)break;
+            size*=.86f;
         }
-        energy = count == 0 ? 0 : energy / count;
-        TextView active = labels.get(selected - windowStart);
-        float scale = 1.0f + 0.06f * energy;
-        active.setScaleX(scale);
-        active.setScaleY(scale);
-        active.setShadowLayer(4f + 14f * energy, 0, 0, 0xBB65E5CF);
+        invalidate();
+    }
+    @Override protected void onDraw(Canvas c){
+        super.onDraw(c);select();
+        if(blocks.length==0)return;
+        long now=SystemClock.elapsedRealtime();float age=(now-changedAt)/1000f;
+        float y=(getHeight()-totalHeight)*.48f;
+        // The stagger is an entrance effect, not a claim of word-level karaoke timing.
+        for(int i=0;i<blocks.length;i++){
+            float t=Math.max(0,Math.min(1,(age-i*.065f)/.5f));float ease=1-(1-t)*(1-t)*(1-t);
+            float x=(getWidth()-blockWidth)/2;
+            if(style==2)x+=(i%2==0?-1:1)*getWidth()*.035f;
+            float slide=(1-ease)*Math.min(36,getWidth()*.06f);
+            c.save();c.clipRect(0,0,getWidth(),getHeight());
+            c.translate(x+(style==2?(i%2==0?-slide:slide):0),y+slide);
+            if(style==2)c.rotate(-4,blockWidth*.5f,heights[i]*.5f);
+            float pulse=now-audioAt<500?energy*.008f:0;
+            c.scale(1+pulse,1+pulse,blockWidth*.5f,heights[i]*.5f);
+            blocks[i].getPaint().setAlpha((int)(255*ease));blocks[i].draw(c);c.restore();y+=heights[i];
+        }
+        ink.setColor(0xFFB7B8BC);ink.setTextSize(Math.min(14*getResources().getDisplayMetrics().scaledDensity,getWidth()*.035f));ink.setTextAlign(android.graphics.Paint.Align.CENTER);
+        if(!lyrics.synced)c.drawText(lyrics.lines.isEmpty()?"Afventer sangtekst":"Tekst uden tidskoder",getWidth()/2f,getHeight()*.94f,ink);
+        if(isShown()&&(playing||age<1))postInvalidateDelayed(40);
     }
 }

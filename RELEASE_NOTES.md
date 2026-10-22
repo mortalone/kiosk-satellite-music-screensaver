@@ -1,5 +1,14 @@
 # Release Notes — Music Screensaver
 
+## 0.1.7 — first reference-driven revision
+
+- Replace fixed six-lobe contour and orbital dots with viscous moving masses and a mergeable implicit surface.
+- Remove the circular bezel and glass wedge; use a softly illuminated cavity.
+- Remove synthetic 124 BPM fallback. Missing live audio is indicated explicitly.
+- Replace scrolling lyrics with four phrase-based typographic compositions: centered serif, stacked condensed, staggered diagonal, contrasting scales.
+- Interpolate line timestamps between player updates and freeze on pause. No invented word timing.
+- Add fluid stability and surface-topology checks. Physical-device appearance, sound alignment and performance still require validation.
+
 ## 0.1.6
 
 - **Authentic Vinyl Player Aesthetic (`home-assistant-vinyl-player`)**:
