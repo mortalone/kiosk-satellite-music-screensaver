@@ -71,3 +71,11 @@ Select **Vinyl visning → Backlit Splatter** for the illuminated pressing. It w
 Android Dream is separate from Kiosk's internal screensaver. The plugin observes Dream start/stop broadcasts and requests that Kiosk move forward when music is eligible. Android can reject background launches. No hidden API, force-stop or secure-setting modification is used. An existing Dream that started before the plugin registered may not produce a new start event.
 
 If an HA automation starts Fotoo, add a condition to that automation to skip starting it while the music-screensaver active entity is on. A separate existing supported action to end the native Dream may still be needed. Entity/action IDs must come from the user's actual automation; do not invent them. Stopping Kiosk's internal screensaver alone is not proof that Fotoo's Dream ended.
+
+### 0.1.12 playback and visualization
+
+HA visualization selections are saved with the full plugin configuration. Timed lyrics follow a monotonic estimate anchored to HA's position timestamp; plain text remains explicitly untimed and cannot be synchronized automatically.
+
+The **Lyddata** text sensor shows whether live FFT bands arrive and the measured bass/pulse. No live audio means gain cannot create real synchronization. Bass onset hold/decay is adapted from the Twinkly bridge, but the screensaver only has FFT bands, not the bridge's scheduled raw PCM.
+
+Vinyl style now also offers **Backlit Marble**, **Backlit Sunburst**, and **Backlit Translucent**. Light modes continue to be Music, Flow and Album. **Native** fluid quality uses the displayed diameter up to 1024 pixels; it is a CPU raster and may reduce frame rate on a Pi. A 27-inch diagonal alone does not determine required pixel resolution.

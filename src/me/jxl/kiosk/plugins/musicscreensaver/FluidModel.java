@@ -9,6 +9,8 @@ final class FluidModel {
     final float[] x = new float[COUNT], y = new float[COUNT];
     final float[] vx = new float[COUNT], vy = new float[COUNT], radius = new float[COUNT];
     private final Random random;
+    private float pulse,lastPulse;
+    void setPulse(float value){pulse=Math.max(0,Math.min(1.5f,value));}
     private float magnetX, magnetY, targetX, targetY, untilChange, previousBass, cooldown;
     FluidModel(long seed) {
         random = new Random(seed);
@@ -20,11 +22,18 @@ final class FluidModel {
     void step(float dt, float bass, float mid, float treble) {
         dt=Math.max(0,Math.min(.05f,dt));
         bass=finite(bass);mid=finite(mid);treble=finite(treble);
+        float kick=Math.max(0,pulse-lastPulse);lastPulse=pulse;
+        if(kick>.04f)for(int i=0;i<COUNT;i++){
+            float d=(float)Math.sqrt(x[i]*x[i]+y[i]*y[i]);
+            float angle=random.nextFloat()*6.283185f;
+            vx[i]+=(d>.02f?x[i]/d:(float)Math.cos(angle))*kick*2.4f;
+            vy[i]+=(d>.02f?y[i]/d:(float)Math.sin(angle))*kick*2.4f;
+        }
         untilChange-=dt;cooldown-=dt;
         float onset=Math.max(0,bass-previousBass);previousBass=bass;
         if(untilChange<=0 || (onset>.075f && cooldown<=0)) {
-            targetX=(random.nextFloat()-.5f)*.75f;
-            targetY=(random.nextFloat()-.5f)*.65f;
+            targetX=(random.nextFloat()-.5f)*(.05f+Math.min(1,bass)*.7f);
+            targetY=(random.nextFloat()-.5f)*(.05f+Math.min(1,bass)*.6f);
             untilChange=.7f+random.nextFloat()*2.3f;
             if(onset>.075f && cooldown<=0) {
                 // A different mass receives the impulse; never a radial ring or fixed orbit.
@@ -59,7 +68,7 @@ final class FluidModel {
     private float finite(float v){return Float.isNaN(v)||Float.isInfinite(v)?0:Math.max(0,Math.min(1.5f,v));}
     float field(float px,float py) {
         float f=0;
-        for(int i=0;i<COUNT;i++){float dx=px-x[i],dy=py-y[i];f+=radius[i]*radius[i]/(dx*dx+dy*dy+.0007f);}
+        for(int i=0;i<COUNT;i++){float dx=px-x[i],dy=py-y[i];f+=radius[i]*radius[i]*(1+.45f*pulse)/(dx*dx+dy*dy+.0007f);}
         return f;
     }
 }

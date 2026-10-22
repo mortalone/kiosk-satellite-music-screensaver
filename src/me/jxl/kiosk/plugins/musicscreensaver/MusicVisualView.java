@@ -53,6 +53,7 @@ final class MusicVisualView extends View {
     private final float[] levels = new float[32];
     private final float[] smoothedLevels = new float[32];
     private long lastAudioFrameAt = 0;
+    private final AudioEnvelope audioEnvelope=new AudioEnvelope();
     private float smoothedBass = 0;
     private float smoothedMid = 0;
     private float smoothedTreble = 0;
@@ -146,10 +147,18 @@ final class MusicVisualView extends View {
         }
     }
 
+    String audioStatus(){
+        long age=SystemClock.elapsedRealtime()-lastAudioFrameAt;
+        return age>1200?"Ingen live lyddata":String.format(java.util.Locale.ROOT,"Live · bas %.2f · puls %.2f",smoothedBass,audioEnvelope.pulse(SystemClock.elapsedRealtime()));
+    }
+
     void acceptAudio(float[] bands) {
         if (bands == null || bands.length == 0) return;
         int count = Math.min(levels.length, bands.length);
-        float gainMult = 0.7f + (gain * 0.28f);
+        float gainMult = .45f + gain * .45f;
+        float rawBass=0;
+        for(int i=0;i<Math.min(6,count);i++)if(Float.isFinite(bands[i]))rawBass+=Math.max(0,bands[i]);
+        audioEnvelope.feed(rawBass/Math.max(1,Math.min(6,count)),SystemClock.elapsedRealtime());
         lastAudioFrameAt = SystemClock.elapsedRealtime();
         for(int i=count;i<levels.length;i++)levels[i]=0;
         for (int i = 0; i < count; i++) {
@@ -186,6 +195,7 @@ final class MusicVisualView extends View {
         smoothedMid = midSum / 12.0f;
         smoothedTreble = trebleSum / 14.0f;
 
+        fluid.setPulse(playing?Math.min(1.5f,audioEnvelope.pulse(SystemClock.elapsedRealtime())*(.35f+gain*.17f)):0);
         fluid.step(dt, smoothedBass, smoothedMid, smoothedTreble);
 
     }
@@ -333,7 +343,7 @@ final class MusicVisualView extends View {
         float discR = isPortrait ? Math.min(w * 0.41f, h * 0.25f) : Math.min(w * (split ? 0.20f : 0.34f), h * 0.36f);
         if (discR <= 10) return;
 
-        if("Backlit Splatter".equals(vinylStyle)){backlit.draw(c,cx,cy,discR,cover,dominantColor,elapsed,bass);return;}
+        if(vinylStyle.startsWith("Backlit ")){backlit.setPattern(vinylStyle);backlit.draw(c,cx,cy,discR,cover,dominantColor,elapsed,bass);return;}
 
         boolean withGlow = !"Disc Only (Minimal)".equals(vinylStyle);
 

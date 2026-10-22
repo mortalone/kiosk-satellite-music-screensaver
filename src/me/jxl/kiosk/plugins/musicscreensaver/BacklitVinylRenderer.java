@@ -6,6 +6,8 @@ import android.graphics.*;
 /** Procedural translucent pressing: stationary pigment, moving light underneath. */
 final class BacklitVinylRenderer {
     String mode="Music";
+    private String pattern="Backlit Splatter";
+    void setPattern(String value){if(!pattern.equals(value)){pattern=value;pigment=null;}}
     private final Paint paint=new Paint(3);
     private final Path clip=new Path();
     private final RectF rect=new RectF();
@@ -32,6 +34,10 @@ final class BacklitVinylRenderer {
             double veins=noise(px*13+warp,py*13-warp);
             double flecks=.65*noise(px*87+warp*4,py*87-warp*4)+.35*noise(px*169,py*169);
             double density=(flecks-.47)*9+(veins-.5)*1.8;
+            if("Backlit Marble".equals(pattern))density=Math.sin(px*14+warp*6+noise(px*9,py*9)*4)*.7+(veins-.5);
+            else if("Backlit Sunburst".equals(pattern))density=Math.sin(a*39+warp*3+r*5)*.65+(flecks-.5)*2;
+            else if("Backlit Translucent".equals(pattern))density=-.8+(veins-.5)*.5;
+
             int alpha=(int)Math.max(8,Math.min(245,120+density*190));
             if(r>.95)alpha=Math.max(alpha,(int)(150+(r-.95)*1500));
             pixels[y*n+x]=(alpha<<24)|0x101321;
@@ -51,7 +57,7 @@ final class BacklitVinylRenderer {
         paint.setStyle(Paint.Style.FILL);paint.setColor(Color.WHITE);paint.setAlpha(255);
         paint.setShader(new RadialGradient(cx,cy,r*1.18f,new int[]{0x004D8CA8,0x4056A8CE,0},new float[]{0,.8f,1},Shader.TileMode.CLAMP));
         c.drawCircle(cx,cy,r*1.18f,paint);
-        matrix.setRotate((float)(time*("Album".equals(mode)?2:9)),cx,cy);light.setLocalMatrix(matrix);
+        matrix.setRotate((float)(time*("Album".equals(mode)?4:"Flow".equals(mode)?18:30)),cx,cy);light.setLocalMatrix(matrix);
         paint.setShader(light);paint.setAlpha((int)(255*intensity));c.drawCircle(cx,cy,r,paint);
         paint.setShader(null);paint.setAlpha(255);
         if("Album".equals(mode)){paint.setColor((palette&0xffffff)|0x88000000);c.drawCircle(cx,cy,r,paint);paint.setColor(Color.WHITE);}

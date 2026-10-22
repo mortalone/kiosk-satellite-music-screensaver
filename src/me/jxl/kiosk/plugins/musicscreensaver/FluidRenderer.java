@@ -13,13 +13,14 @@ final class FluidRenderer {
     private int[] pixels;
     private int size;
     private int quality=384;
-    void setQuality(String value){quality="Ultra".equals(value)?640:"Eco".equals(value)?192:384;}
+    void setQuality(String value){quality="Native".equals(value)?1024:"Ultra".equals(value)?640:"Eco".equals(value)?192:384;}
     private RadialGradient cavity;
     private float oldCx,oldCy,oldR;
     private int oldColor;
+    void setPulse(float pulse){model.setPulse(pulse);}
     void step(float dt,float bass,float mid,float treble){model.step(dt,bass,mid,treble);}
     void draw(Canvas c,float cx,float cy,float r,boolean economy,int tint) {
-        int n=quality;
+        int n=Math.min(quality,Math.max(192,(int)(r*2)));
         if(n!=size){size=n;bitmap=Bitmap.createBitmap(n,n,Bitmap.Config.ARGB_8888);field=new float[n*n];pixels=new int[n*n];}
         // Broad light fades into the scene: no bezel, outline, or front glass wedge.
         if(cavity==null||oldCx!=cx||oldCy!=cy||oldR!=r||oldColor!=tint){

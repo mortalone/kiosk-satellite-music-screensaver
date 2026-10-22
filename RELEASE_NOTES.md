@@ -1,5 +1,15 @@
 # Release Notes — Music Screensaver
 
+## 0.1.12
+
+- Fix playback time rewinding on repeated HA snapshots. Respect media_position_updated_at, pause/resume, seeking and track changes. This affects timed lyrics and vinyl light motion.
+- Persist the complete settings map when choosing a visualization from HA, preserving the other settings.
+- Adapt Twinkly bridge's relative bass-rise, hold and decay principle to incoming FFT bands. Apply explicit outward fluid impulses and expansion; widen gain response and reduce unrelated idle wandering. This is not the bridge's PCM spectral-attack analyzer.
+- Add a Lyddata diagnostic text sensor with live bass/pulse values or missing-feed status.
+- Add Backlit Marble, Backlit Sunburst and Backlit Translucent patterns and faster moving illumination.
+- Add size-aware Native ferrofluid detail up to 1024 pixels. High resolutions cost CPU; measure on the actual display.
+- Regression checks cover repeated snapshots, pause/resume, seek, track change, sustained tones and transient pulse retention.
+
 ## 0.1.11
 
 - Fix a startup/hidden-overlay crash when HA reports volume before a MusicVisualView exists. Remove unrelated quality/lighting updates from both volume handlers; apply them only when creating/configuring the view.

@@ -43,6 +43,26 @@ public final class MusicScreensaverTest {
         for(int i=0;i<FluidModel.COUNT;i++){driven.x[i]=i<4?-.55f:.55f;driven.y[i]=0;}
         check(driven.field(-.55f,0)>1 && driven.field(.55f,0)>1 && driven.field(0,0)<1,"Surface supports detached droplets");
 
+        PlaybackClock clock=new PlaybackClock();
+        clock.update("a",true,10.0,"t",null,1000,1000);
+        clock.update("a",true,10.0,"t",null,6000,6000);
+        check(Math.abs(clock.at(6000)-15)<.01,"Repeated position does not rewind playback");
+        clock.update("a",false,10.0,"t",null,6000,6000);
+        check(Math.abs(clock.at(9000)-15)<.01,"Pause freezes interpolated position");
+        clock.update("a",true,10.0,"t",null,9000,9000);
+        check(Math.abs(clock.at(11000)-17)<.01,"Resume continues from pause");
+        clock.update("a",true,2.0,"new",10000L,11000,11000);
+        check(Math.abs(clock.at(11000)-3)<.01,"Seek respects HA timestamp");
+        clock.update("b",true,0.0,"next",null,12000,12000);
+        check(clock.at(12000)==0,"New track resets clock");
+        AudioEnvelope envelope=new AudioEnvelope();
+        for(int i=0;i<30;i++)envelope.feed(.1f,i*40);
+        check(envelope.pulse(1160)==0,"Sustained audio does not invent beats");
+        envelope.feed(.5f,1200);
+        check(envelope.pulse(1200)>.2f,"Bass transient creates pulse");
+        check(envelope.pulse(1280)>0,"Pulse survives between frames");
+        check(envelope.pulse(2000)==0,"Missing audio clears pulse");
+
         System.out.println("MusicScreensaver unit tests passed successfully!");
     }
 

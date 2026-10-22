@@ -53,6 +53,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     private boolean kioskScreensaverActive = false;
     private boolean manualActive = false;
     private String effect = "hybrid_vinyl";
+    private final Map<String,Object> savedSettings=new HashMap<>();
     private String vinylStyle = "With Ambient Glow";
     private String ferrofluidColor = "Obsidian Black";
     private String backgroundTheme = "Album Tinted";
@@ -78,6 +79,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     private String haBaseUrl = "";
     private Bitmap currentCover;
     private double trackDuration = 0;
+    private final PlaybackClock playbackClock=new PlaybackClock();
     private double trackPosition = 0;
     private long trackPositionAnchor = 0;
     private float currentVolume = 0.5f;
@@ -117,6 +119,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                     postponeKioskScreensaver();
                 }
                 notifyAudioPresentation();
+                if(visualView!=null)try{host.publishTextSensor("audio_status","Lyddata",visualView.audioStatus());}catch(Exception ignored){}
             }
             main.postDelayed(this, 1000);
         }
@@ -184,6 +187,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     @Override
     public synchronized void configure(Map<String, Object> settings) {
         if (settings == null) return;
+        savedSettings.clear();savedSettings.putAll(settings);
         String previousEffect=effect;
         speakerEntity = str(settings, "speakerEntity", "");
         activationMode = str(settings, "activationMode", "When screensaver starts");
@@ -312,7 +316,9 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     }
 
     private void setEffect(String newEffect) {
+        if(effect.equals(newEffect))return;
         this.effect = newEffect;
+        if(host!=null)try{savedSettings.put("effect",newEffect);host.saveSettings(new HashMap<>(savedSettings));}catch(Exception error){host.log("Could not persist visualization: "+error.getMessage());}
         if (visualView != null) {
             visualView.configure(effect, vinylStyle, ferrofluidColor, backgroundTheme,
                     showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
@@ -374,12 +380,13 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         if (dur instanceof Number) this.trackDuration = ((Number) dur).doubleValue();
 
         Object pos = attrs.get("media_position");
-        if (pos instanceof Number) {
-            this.trackPosition = ((Number) pos).doubleValue();
-            this.trackPositionAnchor = SystemClock.elapsedRealtime();
-        }
-
         String trackKey = artist + " - " + title;
+        String timestamp=String.valueOf(attrs.get("media_position_updated_at"));
+        Long timestampMs=null;
+        try{timestampMs=java.time.Instant.parse(timestamp).toEpochMilli();}catch(Exception ignored){}
+        playbackClock.update(trackKey+"|"+String.valueOf(attrs.get("media_content_id")),"playing".equalsIgnoreCase(playerState),pos instanceof Number?((Number)pos).doubleValue():null,
+                timestamp,timestampMs,SystemClock.elapsedRealtime(),System.currentTimeMillis());
+
         if (!trackKey.equals(dismissedTrackId)) {
             userDismissed = false;
         }
@@ -558,8 +565,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     }
 
     private double estimatedPosition() {
-        if (!"playing".equalsIgnoreCase(playerState)) return trackPosition;
-        return trackPosition + Math.max(0, SystemClock.elapsedRealtime() - trackPositionAnchor) / 1000.0;
+        return playbackClock.at(SystemClock.elapsedRealtime());
     }
 
     private void pollVisibility() {
