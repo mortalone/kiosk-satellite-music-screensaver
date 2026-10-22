@@ -1,5 +1,13 @@
 # Release Notes — Music Screensaver
 
+## 0.1.14
+
+- Add Words Fly, Words Drop and Letters Assemble lyric animations; include all in Random.
+- Animate individual words or character clusters into their final readable layout. Short lines support letters; longer lines fall back to words.
+- Finish entrances within 38% of the line interval, capped at 1.6 seconds, leaving a reading hold. Pause/seek follow playback position. This is choreography using line timestamps, not word-level karaoke.
+- Reuse shaped text layouts, cap work for unusually long lines, and render the settled phrase once rather than per character.
+- Add range and timing regression tests. Native visual appearance still requires device verification.
+
 ## 0.1.13
 
 - Retry attaching a requested overlay on subsequent ticks instead of abandoning it after one 300 ms attempt.

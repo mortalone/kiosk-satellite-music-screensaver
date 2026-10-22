@@ -63,6 +63,16 @@ public final class MusicScreensaverTest {
         check(envelope.pulse(1280)>0,"Pulse survives between frames");
         check(envelope.pulse(2000)==0,"Missing audio clears pulse");
 
+        java.util.List<int[]> words=LyricMotion.ranges("Hej verden!",false);
+        check(words.size()==2&&words.get(1)[1]==11,"Word animation retains punctuation");
+        java.util.List<int[]> letters=LyricMotion.ranges("a\u030a😀",true);
+        check(letters.size()==2&&letters.get(0)[1]==2&&letters.get(1)[1]==4,"Keep combining accents and surrogate pairs together");
+        float budget=LyricMotion.budget(.4);
+        check(budget<.2&&LyricMotion.progress(budget,29,30,budget)>.999f,"Fast line finishes entrance early enough to read");
+        check(LyricMotion.progress(0,0,5,1)==0,"Entrance starts hidden");
+        check(LyricMotion.progress(.1f,4,5,1)==0,"Later words wait for stagger");
+        check(LyricMotion.budget(20)<=1.6f,"Long lines cannot stretch entrance indefinitely");
+
         System.out.println("MusicScreensaver unit tests passed successfully!");
     }
 

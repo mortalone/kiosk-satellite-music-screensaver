@@ -24,13 +24,17 @@ final class MusicLyricsView extends View {
     private double position;
     private long anchor,changedAt,audioAt;
     private boolean playing;
+    private final ArrayList<float[]> pieces=new ArrayList<>();
+    private float entranceBudget=1.2f;
+    private boolean motionLetters;
+
     private String currentTrack="", status="Henter sangtekst…", chosenStyle="Random";
     private final java.util.Random random=new java.util.Random();
     void setStatus(String value){status=value;invalidate();}
-    void setStyle(String value){chosenStyle=value;chooseStyle();compose();}
+    void setStyle(String value){if(chosenStyle.equals(value))return;chosenStyle=value;chooseStyle();compose();}
     private void chooseStyle(){
-        if("Random".equals(chosenStyle)){style=(style+1+random.nextInt(3))%4;}
-        else style="Stacked".equals(chosenStyle)?1:"Diagonal".equals(chosenStyle)?2:"Contrast".equals(chosenStyle)?3:0;
+        if("Random".equals(chosenStyle)){style=(style+1+random.nextInt(6))%7;}
+        else style="Words Fly".equals(chosenStyle)?4:"Words Drop".equals(chosenStyle)?5:"Letters Assemble".equals(chosenStyle)?6:"Stacked".equals(chosenStyle)?1:"Diagonal".equals(chosenStyle)?2:"Contrast".equals(chosenStyle)?3:0;
     }
 
     MusicLyricsView(Context context,boolean split){super(context);this.split=split;setWillNotDraw(false);setContentDescription("Sangtekst");setClickable(false);}
@@ -52,7 +56,7 @@ final class MusicLyricsView extends View {
         if(text.isEmpty())text="♪";
 
         String[] words=text.split("\\s+");
-        int groups=style==0?1:Math.min(style==1?3:style==2?4:2,words.length);
+        int groups=style==0||style>=4?1:Math.min(style==1?3:style==2?4:2,words.length);
         blocks=new StaticLayout[groups];
         blockWidth=getWidth()*(style==2?.72f:.82f);
         float size=Math.min(getWidth()*(split?.10f:.105f),getHeight()*.14f);
@@ -66,20 +70,64 @@ final class MusicLyricsView extends View {
                 p.setTypeface(Typeface.create(style==0||style==2?"serif":"sans-serif-condensed",(style==1||i==groups-1)?Typeface.BOLD:Typeface.NORMAL));
                 p.setTextSize(size*(style==3&&i==1?1.5f:1));
                 blocks[i]=StaticLayout.Builder.obtain(part,0,part.length(),p,Math.max(1,(int)blockWidth))
-                    .setAlignment(style==0?Layout.Alignment.ALIGN_CENTER:style==2&&i%2==1?Layout.Alignment.ALIGN_OPPOSITE:Layout.Alignment.ALIGN_NORMAL)
+                    .setAlignment(style==0||style>=4?Layout.Alignment.ALIGN_CENTER:style==2&&i%2==1?Layout.Alignment.ALIGN_OPPOSITE:Layout.Alignment.ALIGN_NORMAL)
                     .setIncludePad(false).setLineSpacing(size*.1f,1).build();
                 heights[i]=blocks[i].getHeight()+size*.18f;totalHeight+=heights[i];
             }
             if(totalHeight<=getHeight()*.7f)break;
             size*=.86f;
         }
+        pieces.clear();
+        if(style>=4){
+            motionLetters=style==6&&text.codePointCount(0,text.length())<=48;
+            StaticLayout layout=blocks[0];
+            java.util.List<int[]> ranges=LyricMotion.ranges(layout.getText().toString(),motionLetters);
+            // Clip the already shaped layout rather than drawing isolated characters.
+            // This preserves ligatures, wrapping and right-to-left text positioning.
+            for(int[] range:ranges){
+                for(int line=layout.getLineForOffset(range[0]);line<=layout.getLineForOffset(range[1]-1);line++){
+                    int start=Math.max(range[0],layout.getLineStart(line));
+                    int end=Math.min(range[1],layout.getLineEnd(line));
+                    float left=layout.getPrimaryHorizontal(start),right=layout.getPrimaryHorizontal(end);
+                    if(end==layout.getLineEnd(line))right=layout.getParagraphDirection(line)==1?layout.getLineRight(line):layout.getLineLeft(line);
+                    pieces.add(new float[]{Math.min(left,right),layout.getLineTop(line),Math.max(left,right),layout.getLineBottom(line)});
+                }
+            }
+            double duration=4;
+            if(lyrics.synced&&selected>=0&&selected+1<lyrics.lines.size())duration=Math.max(.02,lyrics.lines.get(selected+1).at-lyrics.lines.get(selected).at);
+            entranceBudget=LyricMotion.budget(duration);
+        }
         invalidate();
+    }
+    private void drawPieces(Canvas c,float age){
+        StaticLayout layout=blocks[0];
+        float x=(getWidth()-blockWidth)/2,y=(getHeight()-totalHeight)*.48f;
+        if(age>=entranceBudget||pieces.size()>96){
+            c.save();c.translate(x,y);layout.getPaint().setAlpha(255);layout.draw(c);c.restore();return;
+        }
+        for(int i=0;i<pieces.size();i++){
+            float t=LyricMotion.progress(age,i,pieces.size(),entranceBudget);
+            if(t<=0)continue;
+            float remaining=(1-t)*(1-t)*(1-t);
+            float[] p=pieces.get(i);float cx=(p[0]+p[2])/2,cy=(p[1]+p[3])/2;
+            float dx=style==5?0:((i%2==0)?-1:1)*getWidth()*(motionLetters?.12f:.20f)*remaining;
+            float dy=(style==5?-1:(i%3==0?-1:1))*Math.min(getHeight()*.16f,80)*remaining;
+            c.save();c.translate(x+dx,y+dy);
+            c.rotate((i%2==0?-1:1)*(motionLetters?35:12)*remaining,cx,cy);
+            float scale=1-(motionLetters?.4f:.16f)*remaining;c.scale(scale,scale,cx,cy);
+            c.clipRect(p[0],p[1],p[2],p[3]);
+            layout.getPaint().setAlpha((int)(255*Math.min(1,t*3)));layout.draw(c);c.restore();
+        }
     }
     @Override protected void onDraw(Canvas c){
         super.onDraw(c);select();
         if(blocks.length==0)return;
         long now=SystemClock.elapsedRealtime();float age=(now-changedAt)/1000f;
         float y=(getHeight()-totalHeight)*.48f;
+        if(style>=4){
+            float motionAge=lyrics.synced&&selected>=0?(float)Math.max(0,elapsed()-lyrics.lines.get(selected).at):age;
+            drawPieces(c,motionAge);
+        }else{
         // The stagger is an entrance effect, not a claim of word-level karaoke timing.
         for(int i=0;i<blocks.length;i++){
             float t=Math.max(0,Math.min(1,(age-i*.065f)/.5f));float ease=1-(1-t)*(1-t)*(1-t);
@@ -93,8 +141,9 @@ final class MusicLyricsView extends View {
             c.scale(1+pulse,1+pulse,blockWidth*.5f,heights[i]*.5f);
             blocks[i].getPaint().setAlpha((int)(255*ease));blocks[i].draw(c);c.restore();y+=heights[i];
         }
+        }
         ink.setColor(0xFFB7B8BC);ink.setTextSize(Math.min(14*getResources().getDisplayMetrics().scaledDensity,getWidth()*.035f));ink.setTextAlign(android.graphics.Paint.Align.CENTER);
         if(!lyrics.synced)c.drawText(lyrics.lines.isEmpty()?status:"Tekst uden tidskoder",getWidth()/2f,getHeight()*.94f,ink);
-        if(isShown()&&(playing||age<1))postInvalidateDelayed(40);
+        if(isShown()&&(playing||age<Math.max(1,entranceBudget)))postInvalidateDelayed(40);
     }
 }

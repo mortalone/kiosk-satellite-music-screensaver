@@ -79,3 +79,7 @@ HA visualization selections are saved with the full plugin configuration. Timed 
 The **Lyddata** text sensor shows whether live FFT bands arrive and the measured bass/pulse. No live audio means gain cannot create real synchronization. Bass onset hold/decay is adapted from the Twinkly bridge, but the screensaver only has FFT bands, not the bridge's scheduled raw PCM.
 
 Vinyl style now also offers **Backlit Marble**, **Backlit Sunburst**, and **Backlit Translucent**. Light modes continue to be Music, Flow and Album. **Native** fluid quality uses the displayed diameter up to 1024 pixels; it is a CPU raster and may reduce frame rate on a Pi. A 27-inch diagonal alone does not determine required pixel resolution.
+
+### Individual word and letter entrances (0.1.14)
+
+Choose **Tekstanimation → Words Fly / Words Drop / Letters Assemble**, or **Random** to mix these with the four existing compositions. Letters Assemble uses character clusters for lines of up to 48 code points and words for longer lines. The entire phrase settles within at most 1.6 seconds (38% of the line interval for short intervals). Exact sung-word timing is not inferred. Untimed lyrics remain a labeled static excerpt after their entrance.
