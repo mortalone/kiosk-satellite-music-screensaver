@@ -16,6 +16,11 @@ import android.view.MotionEvent;
 import android.view.View;
 
 final class MusicVisualView extends View {
+    private final RadialLight backgroundLight = new RadialLight(new int[]{0x2AFFFFFF,0,0x55000000}, new float[]{0,.65f,1});
+    private final RadialLight discShadow = new RadialLight(new int[]{0x75000000,0x30000000,0}, new float[]{.60f,.88f,1});
+    private RadialLight discGlow;
+    private int discGlowColor;
+
     interface Listener {
         void onPlayPause();
         void onNext();
@@ -328,9 +333,7 @@ final class MusicVisualView extends View {
             c.drawColor(dominantColor);
             // Subtle top-down lighting vignette
             paint.setStyle(Paint.Style.FILL);
-            paint.setShader(new RadialGradient(w * 0.5f, h * 0.35f, Math.max(w, h) * 0.85f,
-                    new int[]{0x2AFFFFFF, 0x00000000, 0x55000000},
-                    new float[]{0f, 0.65f, 1f}, Shader.TileMode.CLAMP));
+            paint.setShader(backgroundLight.at(w * .5f, h * .35f, Math.max(w,h) * .85f));
             c.drawRect(0, 0, w, h, paint);
             paint.setShader(null);
         }
@@ -352,9 +355,11 @@ final class MusicVisualView extends View {
             paint.setStyle(Paint.Style.FILL);
             float glowR = discR * (1.28f + 0.15f * bass);
             int glowColor = (dominantColor & 0x00FFFFFF) | 0x44000000;
-            paint.setShader(new RadialGradient(cx, cy, glowR,
-                    new int[]{glowColor, 0x1A000000, 0x00000000},
-                    new float[]{0f, 0.65f, 1f}, Shader.TileMode.CLAMP));
+            if (discGlow == null || discGlowColor != glowColor) {
+                discGlowColor = glowColor;
+                discGlow = new RadialLight(new int[]{glowColor,0x1A000000,0}, new float[]{0,.65f,1});
+            }
+            paint.setShader(discGlow.at(cx, cy, glowR));
             c.drawCircle(cx, cy, glowR, paint);
             paint.setShader(null);
         }
@@ -363,9 +368,7 @@ final class MusicVisualView extends View {
         float shadowY = cy + discR * 0.08f;
         float shadowR = discR * 1.12f;
         paint.setStyle(Paint.Style.FILL);
-        paint.setShader(new RadialGradient(cx, shadowY, shadowR,
-                new int[]{0x75000000, 0x30000000, 0x00000000},
-                new float[]{0.60f, 0.88f, 1f}, Shader.TileMode.CLAMP));
+        paint.setShader(discShadow.at(cx, shadowY, shadowR));
         c.drawCircle(cx, shadowY, shadowR, paint);
         paint.setShader(null);
 

@@ -12,6 +12,7 @@ final class BacklitVinylRenderer {
     private final Path clip=new Path();
     private final RectF rect=new RectF();
     private final Matrix matrix=new Matrix();
+    private final RadialLight halo = new RadialLight(new int[]{0x004D8CA8,0x4056A8CE,0},new float[]{0,.8f,1});
     private Bitmap pigment;
     private SweepGradient light;
     private final float[] hsv={0,.78f,1};
@@ -55,7 +56,7 @@ final class BacklitVinylRenderer {
         float intensity="Music".equals(mode)?.55f+Math.min(.45f,bass*.5f):.85f;
         c.save();
         paint.setStyle(Paint.Style.FILL);paint.setColor(Color.WHITE);paint.setAlpha(255);
-        paint.setShader(new RadialGradient(cx,cy,r*1.18f,new int[]{0x004D8CA8,0x4056A8CE,0},new float[]{0,.8f,1},Shader.TileMode.CLAMP));
+        paint.setShader(halo.at(cx,cy,r*1.18f));
         c.drawCircle(cx,cy,r*1.18f,paint);
         matrix.setRotate((float)(time*("Album".equals(mode)?4:"Flow".equals(mode)?18:30)),cx,cy);light.setLocalMatrix(matrix);
         paint.setShader(light);paint.setAlpha((int)(255*intensity));c.drawCircle(cx,cy,r,paint);
