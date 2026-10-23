@@ -56,6 +56,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
     private boolean showPaused = true;
     private boolean kioskScreensaverActive = false;
     private boolean manualActive = false;
+    // Explicit HA off must survive track changes and native idle events.
+    private boolean autoInhibited = false;
     private String effect = "hybrid_vinyl";
     private final Map<String,Object> savedSettings=new HashMap<>();
     private String vinylStyle = "With Ambient Glow";
@@ -118,7 +120,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                     lyricsView.setPlaying("playing".equalsIgnoreCase(playerState));
                     lyricsView.updatePosition(estimatedPosition());
                 }
-                if (overruleScreensaver && SystemClock.elapsedRealtime() - lastScreensaverPostpone > 12000) {
+                if ((manualActive || overruleScreensaver) && SystemClock.elapsedRealtime() - lastScreensaverPostpone >= (manualActive ? 1000 : 12000)) {
                     lastScreensaverPostpone = SystemClock.elapsedRealtime();
                     postponeKioskScreensaver();
                 }
@@ -194,6 +196,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             ioPool.shutdownNow();
             ioPool = null;
         }
+        manualActive=false;autoInhibited=false;userDismissed=false;
         this.host = null;
     }
 
@@ -234,7 +237,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             visualView.setFluidQuality(fluidQuality);
             visualView.setVinylLight(vinylLight);
         }
-        if(rootContainer!=null)rootContainer.setKeepScreenOn(overruleScreensaver);
+        if(rootContainer!=null)rootContainer.setKeepScreenOn(manualActive || overruleScreensaver);
         if(isOverlayActive&&!previousEffect.equals(effect))main.post(() -> {
             if(!isOverlayActive)return;
             Activity activity=activeKioskActivity();if(activity!=null)rebuildOverlayViews(activity);
@@ -253,20 +256,9 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         if("cycleLyricsReaction".equals(id)){setLyricsReaction("Fra".equals(lyricsReaction)?"Diskret":"Diskret".equals(lyricsReaction)?"Livlig":"Fra");return;}
         if ("active".equals(id) || "show".equals(id)) {
             boolean turnOn = arguments == null || !Boolean.FALSE.equals(arguments.get("value"));
-            if (turnOn) {
-                userDismissed = false;
-                manualActive = true;
-                bringKioskToFront();
-                showOverlay();
-            } else {
-                userDismissed = true;
-                manualActive = false;
-                hideOverlay();
-            }
+            setManualActive(turnOn);
         } else if ("hide".equals(id)) {
-            userDismissed = true;
-            manualActive = false;
-            hideOverlay();
+            setManualActive(false);
         } else if ("effectVinyl".equals(id)) {
             setEffect("vinyl");
         } else if ("effectFerrofluid".equals(id)) {
@@ -301,16 +293,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             }
             final boolean finalTurnOn = turnOn;
             main.post(() -> {
-                if (finalTurnOn) {
-                    userDismissed = false;
-                    manualActive = true;
-                    bringKioskToFront();
-                    showOverlay();
-                } else {
-                    userDismissed = true;
-                    manualActive = false;
-                    hideOverlay();
-                }
+                if(host!=null)setManualActive(finalTurnOn);
             });
             return;
         }
@@ -328,16 +311,18 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         }
 
         if ("ks.screensaver.state".equals(event) || "screensaver.state".equals(event)) {
-            kioskScreensaverActive = Boolean.TRUE.equals(payload != null ? payload.get("active") : false);
-            if (!kioskScreensaverActive) {
-                userDismissed = false;
-                if (!manualActive && isOverlayActive) {
-                    hideOverlay();
+            final boolean active=Boolean.TRUE.equals(payload != null ? payload.get("active") : false);
+            main.post(() -> {
+                if(host==null)return;
+                kioskScreensaverActive=active;
+                if(manualActive){
+                    if(active)postponeKioskScreensaver();
+                }else{
+                    if(!autoInhibited)userDismissed=false;
+                    if(!active&&isOverlayActive)hideOverlay();
                 }
-            } else {
-                userDismissed = false;
-            }
-            main.post(this::updatePresentation);
+                updatePresentation();
+            });
         }
     }
 
@@ -635,7 +620,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         boolean shouldShow = false;
         if (manualActive) {
             shouldShow = true;
-        } else if (!userDismissed && isVisibilityAllowed()) {
+        } else if (!autoInhibited && !userDismissed && isVisibilityAllowed()) {
             if ("Immediately when playing".equals(activationMode)) {
                 shouldShow = musicEligible;
             } else if ("When screensaver starts".equals(activationMode)) {
@@ -650,6 +635,23 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             else ensureOverlayAttached();
         } else {
             if (isOverlayActive) hideOverlay();
+        }
+    }
+
+    private void setManualActive(boolean active) {
+        manualActive=active;
+        autoInhibited=!active;
+        userDismissed=!active;
+        if(active){
+            lastScreensaverPostpone=SystemClock.elapsedRealtime();
+            postponeKioskScreensaver();
+            showOverlay();
+            if(rootContainer!=null)rootContainer.setKeepScreenOn(true);
+        }else{
+            dismissedTrackId=trackArtist + " - " + trackTitle;
+            hideOverlay();
+            // Dismiss once and re-arm Kiosk idle timer; never change its mode/default.
+            if(host!=null)try{host.executeCommand("stopScreensaver",Collections.emptyMap(),(ok,d,e)->{});}catch(Exception ignored){}
         }
     }
 
@@ -719,7 +721,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
         rootContainer = new FrameLayout(act);
         rootContainer.setBackgroundColor(0xFF0D1014);
-        rootContainer.setKeepScreenOn(overruleScreensaver);
+        rootContainer.setKeepScreenOn(manualActive || overruleScreensaver);
 
         DisplayMetrics dm = act.getResources().getDisplayMetrics();
         boolean isPortrait = dm.heightPixels >= dm.widthPixels;
@@ -775,8 +777,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                 }
             }
             @Override public void onDismiss() {
+                if(manualActive){setManualActive(false);return;}
                 userDismissed = true;
-                manualActive = false;
                 dismissedTrackId = trackArtist + " - " + trackTitle;
                 hideOverlay();
                 if (host != null) {
@@ -891,7 +893,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         if(context==null)return;
         dreamReceiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent intent){
             nativeDreaming=Intent.ACTION_DREAMING_STARTED.equals(intent.getAction());
-            if(nativeDreaming&&isOverlayActive&&overruleScreensaver)bringKioskToFront();
+            if(nativeDreaming&&isOverlayActive&&(manualActive||overruleScreensaver))bringKioskToFront();
             main.post(MusicScreensaverPlugin.this::updatePresentation);
         }};
         IntentFilter filter=new IntentFilter();filter.addAction(Intent.ACTION_DREAMING_STARTED);filter.addAction(Intent.ACTION_DREAMING_STOPPED);
