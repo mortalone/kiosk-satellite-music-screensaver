@@ -1,3 +1,3 @@
-# 0.1.17
+# 0.1.18
 
-Reuse radial lighting shaders for album backgrounds, vinyl glow/shadows and backlit vinyl. Preserve animated lighting via shader matrices instead of creating gradients every frame. Party Mode already uses the host hardware Canvas; no Party update required. This is not a GPU rewrite of the CPU ferrofluid simulation.
+The existing fluidQuality setting is now “Detaljegrad · ferrofluid og vinyl”. Existing values and default High are preserved. Eco/High/Ultra/Native also set backlit texture resolution to 256/640/1024/1536 and vinyl groove counts to 8/14/28/40 (backlit: 24/65/96/128). Texture regeneration happens only on quality/pattern change. Text and covers stay sharp. FPS, gain and speaker delay are unchanged. Still 20 settings.

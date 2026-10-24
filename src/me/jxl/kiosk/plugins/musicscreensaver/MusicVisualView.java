@@ -65,7 +65,13 @@ final class MusicVisualView extends View {
     private long lastPhysicsTime = 0;
 
     private final BacklitVinylRenderer backlit = new BacklitVinylRenderer();
-    void setFluidQuality(String value){fluid.setQuality(value);invalidate();}
+    private int vinylGrooves = 14;
+    void setFluidQuality(String value){
+        fluid.setQuality(value);
+        backlit.setQuality(value);
+        vinylGrooves = "Eco".equals(value) ? 8 : "Ultra".equals(value) ? 28 : "Native".equals(value) ? 40 : 14;
+        invalidate();
+    }
     void setVinylLight(String value){backlit.mode=value;invalidate();}
     private final FluidRenderer fluid = new FluidRenderer();
     // Interactive hit rects
@@ -381,7 +387,7 @@ final class MusicVisualView extends View {
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeCap(Paint.Cap.BUTT);
         float labelR = discR * 0.44f;
-        int rings = economy ? 8 : 14;
+        int rings = vinylGrooves;
         for (int i = 0; i < rings; i++) {
             float r = labelR * 1.05f + (discR * 0.95f - labelR * 1.05f) * (i + 1) / (rings + 1f);
             paint.setColor((i % 2 == 0) ? 0x1AFFFFFF : 0x0AFFFFFF);

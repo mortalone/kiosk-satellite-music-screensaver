@@ -3,7 +3,7 @@
   "apiVersion": 1,
   "id": "music-screensaver",
   "name": "Music Screensaver",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "minAndroidSdk": 26,
   "entryClass": "me.jxl.kiosk.plugins.musicscreensaver.MusicScreensaverPlugin",
   "description": "High-aesthetic music screensaver for Kiosk Satellite featuring rotating vinyl turntable, sound-reactive ferrofluid, Cotodama kinetic lyrics, and hybrid split-stage layouts with smart touch-dismiss.",
@@ -207,7 +207,7 @@
     {
       "key": "fluidQuality",
       "type": "select",
-      "title": "Ferrofluid detaljegrad",
+      "title": "Detaljegrad · ferrofluid og vinyl",
       "default": "High",
       "options": [
         "Eco",
@@ -216,7 +216,7 @@
         "Native"
       ],
       "group": "Performance",
-      "description": "Eco 192, High 384, Ultra 640, Native op til 1024 pixels efter visningsstørrelse. Native belaster CPU mest."
+      "description": "Eco / High / Ultra / Native. Styrer væskeopløsning, vinylriller og backlit-tekstur (256/640/1024/1536 px). Tekst og covers forbliver skarpe. FPS og gain vælges separat. Højere kvalitet kræver mere CPU/GPU og hukommelse."
     },
     {
       "key": "lyricsStyle",

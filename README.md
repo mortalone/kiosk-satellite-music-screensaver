@@ -91,3 +91,7 @@ In HA select **Tekstens musikreaktion → Fra / Diskret / Livlig**. Default is D
 Stacked/Words Drop hop; Diagonal tilts; Serif/Contrast scale (Contrast also subtly thickens); Words Fly/Letters Assemble spread around the center. No reflow occurs on beats.
 
 Synchronization review: Twinkly's sendspin_source.py schedules timestamped frames against the Sendspin client clock. Spectrum Visualizer's publishDigitalFrame instead applies SpeakerSync's Sonos delay BEFORE broadcasting PARTY_AUDIO_FRAME. Its `at` value is dispatch elapsedRealtime, not a future playback deadline. The screensaver therefore must not apply the Sonos buffer again. It rejects demo/stale frames and ages pulses from dispatch. Lydsynkronisering exposes the producer's sync_status_summary (LOCKED/ESTIMATED/etc.); cached status is not proof of a current acoustic lock. Without upstream speaker synchronization, actual physical alignment remains unverified. Rendering and display scanout add latency; no acoustic calibration is claimed.
+
+## Justerbar detaljegrad (0.1.18)
+
+The existing fluidQuality setting is now “Detaljegrad · ferrofluid og vinyl”. Existing values and default High are preserved. Eco/High/Ultra/Native also set backlit texture resolution to 256/640/1024/1536 and vinyl groove counts to 8/14/28/40 (backlit: 24/65/96/128). Texture regeneration happens only on quality/pattern change. Text and covers stay sharp. FPS, gain and speaker delay are unchanged. Still 20 settings.

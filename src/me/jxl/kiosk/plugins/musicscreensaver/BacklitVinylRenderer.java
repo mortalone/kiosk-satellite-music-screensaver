@@ -14,6 +14,12 @@ final class BacklitVinylRenderer {
     private final Matrix matrix=new Matrix();
     private final RadialLight halo = new RadialLight(new int[]{0x004D8CA8,0x4056A8CE,0},new float[]{0,.8f,1});
     private Bitmap pigment;
+    private int textureSize = 640, grooveCount = 65;
+    void setQuality(String quality) {
+        int size = "Eco".equals(quality) ? 256 : "Ultra".equals(quality) ? 1024 : "Native".equals(quality) ? 1536 : 640;
+        grooveCount = "Eco".equals(quality) ? 24 : "Ultra".equals(quality) ? 96 : "Native".equals(quality) ? 128 : 65;
+        if (size != textureSize) { textureSize = size; pigment = null; }
+    }
     private SweepGradient light;
     private final float[] hsv={0,.78f,1};
     private int lastPalette;
@@ -27,7 +33,7 @@ final class BacklitVinylRenderer {
         return top*(1-fy)+bottom*fy;
     }
     private void texture(){
-        int n=640;int[] pixels=new int[n*n];
+        int n=textureSize;int[] pixels=new int[n*n];
         for(int y=0;y<n;y++)for(int x=0;x<n;x++){
             double px=(x-n*.5)/(n*.5),py=(y-n*.5)/(n*.5),r=Math.hypot(px,py),a=Math.atan2(py,px);
             if(r>1)continue;
@@ -64,7 +70,7 @@ final class BacklitVinylRenderer {
         if("Album".equals(mode)){paint.setColor((palette&0xffffff)|0x88000000);c.drawCircle(cx,cy,r,paint);paint.setColor(Color.WHITE);}
         rect.set(cx-r,cy-r,cx+r,cy+r);c.drawBitmap(pigment,null,rect,paint);
         paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(.65f);paint.setColor(0x22FFFFFF);
-        for(int i=0;i<65;i++)c.drawCircle(cx,cy,r*(.27f+i*.011f),paint);
+        for(int i=0;i<grooveCount;i++)c.drawCircle(cx,cy,r*(.27f+i*.704f/Math.max(1,grooveCount-1)),paint);
         paint.setStyle(Paint.Style.FILL);paint.setColor(0xFF161820);float label=r*.24f;c.drawCircle(cx,cy,label,paint);
         if(cover!=null){c.save();clip.reset();clip.addCircle(cx,cy,label,Path.Direction.CW);c.clipPath(clip);rect.set(cx-label,cy-label,cx+label,cy+label);paint.setColor(Color.WHITE);c.drawBitmap(cover,null,rect,paint);c.restore();}
         paint.setColor(0xFF101318);c.drawCircle(cx,cy,r*.018f,paint);
