@@ -211,10 +211,14 @@ final class MusicVisualView extends View {
         if (bands == null || bands.length == 0) return;
         int count = Math.min(levels.length, bands.length);
         float gainMult = .45f + gain * .45f;
-        float rawBass=0;
-        for(int i=0;i<Math.min(6,count);i++)if(Float.isFinite(bands[i]))rawBass+=Math.max(0,bands[i]);
+        float b0 = (count > 0 && Float.isFinite(bands[0])) ? Math.max(0, bands[0]) : 0f;
+        float b1 = (count > 1 && Float.isFinite(bands[1])) ? Math.max(0, bands[1]) : 0f;
+        float b2 = (count > 2 && Float.isFinite(bands[2])) ? Math.max(0, bands[2]) : 0f;
+        float b3 = (count > 3 && Float.isFinite(bands[3])) ? Math.max(0, bands[3]) : 0f;
+        // Bands 1 & 2 (55-80 Hz) dominate physical kick drum punch; isolates kick from bass guitar/synth drone
+        float kickPunch = b1 * 0.45f + b2 * 0.35f + b0 * 0.12f + b3 * 0.08f;
         long now = SystemClock.elapsedRealtime();
-        audioEnvelope.feed(rawBass/Math.max(1,Math.min(6,count)),now);
+        audioEnvelope.feed(kickPunch, now);
         lastAudioFrameAt = now;
         long hitTime = audioEnvelope.getHitTime();
         if (hitTime > lastHitRegistered) {

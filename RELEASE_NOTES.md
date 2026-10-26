@@ -1,3 +1,9 @@
+# 0.1.23
+
+- **Anti-Double-Trigger Beat Tracking**: Extended minimum beat refractory hold-off to 230ms (~260 BPM max) and added transient attack onset flux validation (`onset >= minAttackFlux`). Eliminates sub-bass tail double-triggering and false swells on sustained bass notes that previously caused the visualizer to flutter at 270 BPM and lose synchronization during dense passages.
+- **Kick Drum Frequency Isolation**: Re-weighted raw bass input to focus on bands 1 & 2 (55–80 Hz kick punch fundamental), isolating physical kick drum impacts from low-mid bass guitars, vocal resonances, and synth pads.
+- **Continuous Harmonic Fluid Flow ("Musikstrømmen")**: Added undulating harmonic wave motion driven by chords and continuous bass, ensuring the ferrofluid never freezes dead between beats. Reduced artificial viscous over-damping so droplets oscillate with natural fluid inertia and bounce elastically to the tempo.
+
 # 0.1.22
 
 - **Lockout-Free Dual Envelope Follower**: Replaced single-baseline tracking with an adaptive dual-envelope system (fast-attack peak follower and floor/trough tracker) with guaranteed dynamic headroom (`floor <= 0.55 * peak`). Completely eliminates beat lockout during loud or sustained passages, ensuring crisp beat detection on every kick drum across all musical genres.

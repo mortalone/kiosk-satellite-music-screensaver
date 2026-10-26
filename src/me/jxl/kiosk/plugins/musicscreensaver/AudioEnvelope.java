@@ -50,12 +50,18 @@ final class AudioEnvelope {
         floor = Math.min(floor, peak * 0.55f);
 
         float dynamicRange = Math.max(0.08f, peak - floor);
-        float threshold = floor + dynamicRange * 0.28f;
+        float threshold = floor + dynamicRange * 0.42f;
         float diff = linBass - threshold;
+        float onset = linBass - previous;
+        // Require a sharp transient attack flux (prevents false triggering on gentle bassline swells)
+        float minAttackFlux = Math.max(0.035f, dynamicRange * 0.12f);
 
-        // Beat hit: minimum 115ms between beats (~520 BPM max), above adaptive threshold, rising slope
-        if (now - hit >= 115 && diff > 0 && linBass > previous) {
-            strength = Math.min(1.5f, Math.max(0.40f, 0.40f + (diff / dynamicRange) * 1.1f));
+        // Beat hit:
+        // 1. Minimum 230ms between beats (~260 BPM max) - strictly prevents double-triggering on single kick tail!
+        // 2. Above adaptive threshold (upper 58% of dynamic range)
+        // 3. Positive onset attack flux (rising faster than continuous bass swell)
+        if (now - hit >= 230 && diff > 0 && onset >= minAttackFlux) {
+            strength = Math.min(1.6f, Math.max(0.50f, 0.50f + (diff / dynamicRange) * 1.1f));
             hit = now;
             beatCount++;
         }
@@ -68,7 +74,8 @@ final class AudioEnvelope {
         if (last < 0 || now - last > 600) return 0f;
         long elapsed = Math.max(0, now - hit);
         if (elapsed > 450) return 0f;
-        return strength * (float) Math.exp(-elapsed / 170f);
+        // Smooth 210ms half-life: bridges naturally between beats without jarring stops
+        return strength * (float) Math.exp(-elapsed / 210f);
     }
 
     long getHitTime() {

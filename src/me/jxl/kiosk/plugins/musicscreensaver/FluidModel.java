@@ -78,8 +78,9 @@ final class FluidModel {
         y[0] += vy[0] * dt;
 
         float energy = Math.min(1.2f, bass * 0.7f + mid * 0.3f);
-        // On beat pulse: dramatic radial expansion so lobes stretch into spikes and droplets detach!
-        float stretchFactor = 1.0f + pulse * 0.75f + energy * 0.20f;
+        // Continuous harmonic flow: even between beats, chords and bassline create smooth undulating waves
+        float flowWave = 0.07f * (float) Math.sin(fieldAngle * 2.2f);
+        float stretchFactor = 1.0f + pulse * 0.82f + energy * 0.22f + flowWave;
 
         for (int i = 1; i < COUNT; i++) {
             // Update organic orbit angle with gentle musical acceleration
@@ -105,7 +106,7 @@ final class FluidModel {
             }
 
             // Magnetic spring force toward orbiting target
-            float springK = i <= 3 ? 16.0f : 10.0f;
+            float springK = i <= 3 ? 15.0f : 9.5f;
             float fx = (targetX - x[i]) * springK;
             float fy = (targetY - y[i]) * springK;
 
@@ -131,8 +132,8 @@ final class FluidModel {
                 }
             }
 
-            // Viscous fluid damping
-            float damp = (float) Math.exp(-dt * (4.5f + (1f - Math.min(1f, energy)) * 2.0f));
+            // Natural viscous fluid damping with inertia (prevents premature freezing between beats)
+            float damp = (float) Math.exp(-dt * (2.8f + (1f - Math.min(1f, energy)) * 1.5f));
             vx[i] = (vx[i] + fx * dt) * damp;
             vy[i] = (vy[i] + fy * dt) * damp;
 
