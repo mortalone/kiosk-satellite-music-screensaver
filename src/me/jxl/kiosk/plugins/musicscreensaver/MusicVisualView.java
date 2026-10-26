@@ -215,8 +215,8 @@ final class MusicVisualView extends View {
         float b1 = (count > 1 && Float.isFinite(bands[1])) ? Math.max(0, bands[1]) : 0f;
         float b2 = (count > 2 && Float.isFinite(bands[2])) ? Math.max(0, bands[2]) : 0f;
         float b3 = (count > 3 && Float.isFinite(bands[3])) ? Math.max(0, bands[3]) : 0f;
-        // Bands 1 & 2 (55-80 Hz) dominate physical kick drum punch; isolates kick from bass guitar/synth drone
-        float kickPunch = b1 * 0.45f + b2 * 0.35f + b0 * 0.12f + b3 * 0.08f;
+        // Balanced kick drum detection across sub-bass (b0: 45-55Hz), punch (b1, b2: 55-80Hz), and beater (b3: 80-95Hz)
+        float kickPunch = b1 * 0.38f + b2 * 0.34f + b0 * 0.18f + b3 * 0.10f;
         long now = SystemClock.elapsedRealtime();
         audioEnvelope.feed(kickPunch, now);
         lastAudioFrameAt = now;
@@ -271,7 +271,7 @@ final class MusicVisualView extends View {
         float normTreble = Math.min(1.2f, smoothedTreble / Math.max(0.5f, gainMult));
 
         float rawPulse = audioEnvelope.pulse(SystemClock.elapsedRealtime());
-        float scaledPulse = playing ? Math.min(1.8f, rawPulse * (0.65f + gain * 0.09f)) : 0f;
+        float scaledPulse = playing ? Math.min(1.9f, rawPulse * (0.75f + gain * 0.08f)) : 0f;
 
         fluid.setPulse(scaledPulse);
         fluid.step(dt, normBass, normMid, normTreble);

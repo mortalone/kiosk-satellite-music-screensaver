@@ -20,6 +20,7 @@ final class FluidModel {
     private final Random random;
     private float pulse, lastPulse;
     private float fieldAngle = 0f;
+    private float currentBass = 0f, currentMid = 0f;
 
     void setPulse(float value) {
         pulse = Math.max(0f, Math.min(2.0f, value));
@@ -61,6 +62,8 @@ final class FluidModel {
         bass = finite(bass);
         mid = finite(mid);
         treble = finite(treble);
+        currentBass = bass;
+        currentMid = mid;
 
         float kick = Math.max(0f, pulse - lastPulse);
         lastPulse = pulse;
@@ -161,9 +164,11 @@ final class FluidModel {
 
     float field(float px, float py) {
         float f = 0;
+        // Continuous audio breath: bass and mid frequencies keep droplets plump and alive even between beats
+        float audioBreath = currentBass * 0.20f + currentMid * 0.12f;
         for (int i = 0; i < COUNT; i++) {
             float dx = px - x[i], dy = py - y[i];
-            float r = radius[i] * (1f + (i == 0 ? 0.38f : 0.24f) * pulse);
+            float r = radius[i] * (1f + (i == 0 ? 0.35f : 0.25f) * pulse + (i <= 3 ? 0.18f : 0.26f) * audioBreath);
             f += (r * r) / (dx * dx + dy * dy + 0.0007f);
         }
         return f;

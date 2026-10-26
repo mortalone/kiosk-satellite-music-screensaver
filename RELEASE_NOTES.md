@@ -1,3 +1,9 @@
+# 0.1.24
+
+- **Eliminated 450ms Hard Cutoff Cliff**: Removed premature `elapsed > 450ms` pulse zeroing in `AudioEnvelope.pulse()`. Songs at 80–110 BPM (where beats are 550–750ms apart) previously suffered an artificial 150–250ms "dead zone" where pulse dropped to 0 before the next beat arrived. Now uses continuous exponential fade bridging seamlessly from beat to beat.
+- **Continuous Audio Breath in Fluid Field**: Integrated continuous `audioBreath` (driven by live bass and mid frequencies) directly into metaball field radii in `FluidModel.field()`. Satellite droplets and lobes remain plump, visible, and alive at all times, preventing the fluid from collapsing into dormancy during quiet or syncopated passages.
+- **Dynamic Groove Sensitivity**: Calibrated beat detection threshold from 42% down to 34% with tuned onset flux (`0.08 * dynamicRange`), ensuring soft groove hits, funk syncopations, and verse drum accents are captured reliably without false-triggering on bass guitar drones.
+
 # 0.1.23
 
 - **Anti-Double-Trigger Beat Tracking**: Extended minimum beat refractory hold-off to 230ms (~260 BPM max) and added transient attack onset flux validation (`onset >= minAttackFlux`). Eliminates sub-bass tail double-triggering and false swells on sustained bass notes that previously caused the visualizer to flutter at 270 BPM and lose synchronization during dense passages.

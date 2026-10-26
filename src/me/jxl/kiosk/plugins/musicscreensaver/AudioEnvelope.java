@@ -50,17 +50,18 @@ final class AudioEnvelope {
         floor = Math.min(floor, peak * 0.55f);
 
         float dynamicRange = Math.max(0.08f, peak - floor);
-        float threshold = floor + dynamicRange * 0.42f;
+        // Sensitive yet selective threshold: upper 65% of dynamic range catches groove accents and syncopations
+        float threshold = floor + dynamicRange * 0.34f;
         float diff = linBass - threshold;
         float onset = linBass - previous;
-        // Require a sharp transient attack flux (prevents false triggering on gentle bassline swells)
-        float minAttackFlux = Math.max(0.035f, dynamicRange * 0.12f);
+        // Require transient onset attack flux (rejects gradual bass swells and continuous drone)
+        float minAttackFlux = Math.max(0.020f, dynamicRange * 0.08f);
 
         // Beat hit:
-        // 1. Minimum 230ms between beats (~260 BPM max) - strictly prevents double-triggering on single kick tail!
-        // 2. Above adaptive threshold (upper 58% of dynamic range)
-        // 3. Positive onset attack flux (rising faster than continuous bass swell)
-        if (now - hit >= 230 && diff > 0 && onset >= minAttackFlux) {
+        // 1. Minimum 220ms between beats (~272 BPM max) - strictly prevents sub-bass tail double-triggering
+        // 2. Above adaptive dynamic threshold
+        // 3. Positive onset attack flux
+        if (now - hit >= 220 && diff > 0 && onset >= minAttackFlux) {
             strength = Math.min(1.6f, Math.max(0.50f, 0.50f + (diff / dynamicRange) * 1.1f));
             hit = now;
             beatCount++;
@@ -73,9 +74,10 @@ final class AudioEnvelope {
     float pulse(long now) {
         if (last < 0 || now - last > 600) return 0f;
         long elapsed = Math.max(0, now - hit);
-        if (elapsed > 450) return 0f;
-        // Smooth 210ms half-life: bridges naturally between beats without jarring stops
-        return strength * (float) Math.exp(-elapsed / 210f);
+        // Continuous organic exponential fade: no abrupt 450ms hard step cliff!
+        if (elapsed > 1200) return 0f;
+        // Natural 240ms decay: smoothly bridges between beats at 90-120 BPM without sudden pauses
+        return strength * (float) Math.exp(-elapsed / 240f);
     }
 
     long getHitTime() {
