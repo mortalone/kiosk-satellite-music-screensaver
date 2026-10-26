@@ -1015,7 +1015,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                     .putBoolean("party_fullscreen", isOverlayActive)
                     .putLong("party_until_ms", isOverlayActive ? System.currentTimeMillis() + 60000 : 0)
                     .putString("effect", effect)
-                    .putInt("gain", gain)
+                    .putInt("gain", 2)
                     .putInt("fps", settingEconomy ? 20 : 25)
                     .apply();
             context.sendBroadcast(new Intent("me.jxl.kiosk.plugins.PARTY_PRESENTATION_CHANGED").setPackage(context.getPackageName()));

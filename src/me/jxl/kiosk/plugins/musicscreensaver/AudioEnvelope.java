@@ -18,6 +18,15 @@ final class AudioEnvelope {
 
     void feed(float rawBass, long now) {
         float bass = Float.isFinite(rawBass) ? Math.max(0f, rawBass) : 0f;
+        // Absolute noise gate: silence, acoustic pauses, and digital line noise cannot trigger beats
+        if (bass < 0.12f) {
+            float dt = last > 0 ? Math.max(0.001f, Math.min(0.25f, (now - last) / 1000f)) : 0.04f;
+            peak -= peak * (1f - (float) Math.exp(-dt / 0.70f));
+            floor -= floor * (1f - (float) Math.exp(-dt / 0.90f));
+            previous = 0f;
+            last = now;
+            return;
+        }
         // Non-linear power expansion to separate drum kicks from baseline hum
         float linBass = (float) Math.pow(Math.min(1.8f, bass), 2.2f);
 

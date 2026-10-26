@@ -19,6 +19,7 @@ final class FluidModel {
     private final float[] orbitDist = new float[COUNT];
     private final Random random;
     private float pulse, lastPulse;
+    private float currentEnergy = 0f;
     private float fieldAngle = 0f;
 
     void setPulse(float value) {
@@ -65,8 +66,12 @@ final class FluidModel {
         float kick = Math.max(0f, pulse - lastPulse);
         lastPulse = pulse;
 
-        // Music rhythm advances the magnetic vortex angle at smooth, musical speed (~8-15 RPM)
-        fieldAngle += dt * (0.35f + bass * 0.45f + mid * 0.25f);
+        currentEnergy = Math.min(1.2f, bass * 0.7f + mid * 0.3f);
+        float stretchFactor = 1.0f + pulse * 1.05f + currentEnergy * 0.28f;
+
+        // Music rhythm advances the magnetic vortex angle with audio energy
+        float motionRate = 0.12f + currentEnergy * 0.88f + pulse * 0.35f;
+        fieldAngle += dt * motionRate * 0.75f;
 
         // Core nucleus dynamics: slight breathing oscillation, anchored at center
         float coreFx = -x[0] * 32.0f;
@@ -77,12 +82,9 @@ final class FluidModel {
         x[0] += vx[0] * dt;
         y[0] += vy[0] * dt;
 
-        float energy = Math.min(1.2f, bass * 0.7f + mid * 0.3f);
-        float stretchFactor = 1.0f + pulse * 1.05f + energy * 0.28f;
-
         for (int i = 1; i < COUNT; i++) {
-            // Update organic orbit angle with gentle musical acceleration
-            phase[i] += dt * orbitSpeed[i] * (1.0f + bass * 0.45f + mid * 0.20f);
+            // Update organic orbit angle with musical rhythm
+            phase[i] += dt * orbitSpeed[i] * motionRate;
             float a = phase[i] + fieldAngle * (i <= 3 ? 0.35f : 0.70f);
 
             // Dynamic asymmetric magnetic deformation
@@ -131,7 +133,7 @@ final class FluidModel {
             }
 
             // Viscous fluid damping
-            float damp = (float) Math.exp(-dt * (3.8f + (1f - Math.min(1f, energy)) * 1.8f));
+            float damp = (float) Math.exp(-dt * (3.8f + (1f - Math.min(1f, currentEnergy)) * 1.8f));
             vx[i] = (vx[i] + fx * dt) * damp;
             vy[i] = (vy[i] + fy * dt) * damp;
 
@@ -161,7 +163,7 @@ final class FluidModel {
         float f = 0;
         for (int i = 0; i < COUNT; i++) {
             float dx = px - x[i], dy = py - y[i];
-            float r = radius[i] * (1f + (i == 0 ? 0.38f : 0.28f) * pulse);
+            float r = radius[i] * (1f + (i == 0 ? 0.38f : 0.28f) * pulse + (i == 0 ? 0.12f : 0.20f) * currentEnergy);
             f += (r * r) / (dx * dx + dy * dy + 0.0007f);
         }
         return f;
