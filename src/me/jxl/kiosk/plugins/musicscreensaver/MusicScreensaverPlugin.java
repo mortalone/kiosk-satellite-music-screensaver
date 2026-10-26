@@ -75,6 +75,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
 
     // State
     private boolean isOverlayActive = false;
+    private boolean debugHudEnabled = false;
     private boolean userDismissed = false;
     private String dismissedTrackId = "";
     private String playerState = "idle";
@@ -132,6 +133,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                     visualView.setSyncInfo(delay,sync);
                     host.publishTextSensor("audio_status","Lyddata",visualView.audioStatus());
                     host.publishTextSensor("audio_sync","Lydsynkronisering",sync.isEmpty()?"Ingen synkroniseringsstatus fra Spectrum Visualizer":sync);
+                    host.publishTextSensor("audio_debug","Lydsynk Telemetri",visualView.audioDebugSummary());
                 }catch(Exception ignored){}
             }
             main.postDelayed(this, 1000);
@@ -281,12 +283,29 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             volumeControls = "Off".equals(volumeControls) ? "Slider" : "Off";
             if (visualView != null) visualView.configure(effect, vinylStyle, ferrofluidColor, backgroundTheme, showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
         } else if ("toggleDebugHud".equals(id)) {
-            if (visualView != null) visualView.toggleDebugHud();
+            setDebugHud(!debugHudEnabled);
         }
+    }
+
+    private void setDebugHud(boolean enable) {
+        this.debugHudEnabled = enable;
+        if (visualView != null) visualView.setDebugHud(enable);
+        publishState();
     }
 
     @Override
     public void onEvent(String event, Map<String, Object> payload) {
+        if (event != null && (event.equals("switch.debug_hud") || event.endsWith(".debug_hud"))) {
+            boolean turnOn = false;
+            if (payload != null) {
+                if (payload.get("on") instanceof Boolean) turnOn = (Boolean) payload.get("on");
+                else if (payload.get("value") instanceof Boolean) turnOn = (Boolean) payload.get("value");
+                else if ("on".equalsIgnoreCase(String.valueOf(payload.get("state")))) turnOn = true;
+            }
+            final boolean finalTurnOn = turnOn;
+            main.post(() -> setDebugHud(finalTurnOn));
+            return;
+        }
         if(event!=null&&(event.equals("select.lyrics_reaction")||event.endsWith(".lyrics_reaction"))&&payload!=null){
             Object value=payload.get("option");if(value==null)value=payload.get("value");if(value==null)value=payload.get("state");
             final String chosen=String.valueOf(value);main.post(() -> setLyricsReaction(chosen));return;
@@ -363,6 +382,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
             host.publishSelect("effect", "Visualisering",
                     new String[]{"hybrid_vinyl", "hybrid_ferrofluid", "vinyl", "ferrofluid", "cotodama"}, effect);
             host.publishSwitch("active", "Aktiv", isOverlayActive);
+            host.publishSwitch("debug_hud", "Vis synk-debugger på skærm", debugHudEnabled);
             host.publishSelect("lyrics_reaction","Tekstens musikreaktion",new String[]{"Fra","Diskret","Livlig"},lyricsReaction);
         } catch (Throwable ignored) {}
     }
@@ -743,7 +763,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         visualView.setVolumeLevel(currentVolume);
         visualView.setFluidQuality(fluidQuality);
         visualView.setVinylLight(vinylLight);
-        visualView.updateTrack(trackTitle, trackArtist, currentCover, "playing".equalsIgnoreCase(playerState), estimatedPosition());
+        visualView.setDebugHud(debugHudEnabled);
+        visualView.updateTrack(trackTitle, trackArtist, currentCover, "playing".equalsIgnoreCase(playerState), estimatedPosition(), trackDuration);
         visualView.setListener(new MusicVisualView.Listener() {
             @Override public void onPlayPause() {
                 boolean isPlaying = "playing".equalsIgnoreCase(playerState);

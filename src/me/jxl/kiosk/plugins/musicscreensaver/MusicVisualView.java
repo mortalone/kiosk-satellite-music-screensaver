@@ -83,7 +83,8 @@ final class MusicVisualView extends View {
         invalidate();
     }
     void setVinylLight(String value){backlit.mode=value;invalidate();}
-    void toggleDebugHud(){showDebugHud=!showDebugHud;invalidate();}
+    void setDebugHud(boolean show){this.showDebugHud=show;invalidate();}
+    boolean isDebugHudActive(){return showDebugHud;}
     void setSyncInfo(int delayMs,String syncStatus){this.effectiveSyncDelayMs=delayMs;this.syncStatusText=syncStatus==null?"":syncStatus;}
     private final FluidRenderer fluid = new FluidRenderer();
     // Interactive hit rects
@@ -188,6 +189,23 @@ final class MusicVisualView extends View {
                 formatDetailedTime(elapsedSeconds()),smoothedBass,p,effectiveSyncDelayMs);
     }
 
+    String audioDebugSummary() {
+        long age = SystemClock.elapsedRealtime() - lastAudioFrameAt;
+        float p = audioEnvelope.pulse(SystemClock.elapsedRealtime());
+        return String.format(java.util.Locale.ROOT,
+            "Spor %s/%s · Sync %dms · Alder %dms · Beat @ %s (%.2f) · Bas %.2f · Mid %.2f · Treb %.2f · Puls %.2f",
+            formatDetailedTime(elapsedSeconds()),
+            formatDetailedTime(trackDuration),
+            effectiveSyncDelayMs,
+            age,
+            (lastBeatTrackTime > 0 ? formatDetailedTime(lastBeatTrackTime) : "afventer"),
+            lastBeatStrength,
+            smoothedBass,
+            smoothedMid,
+            smoothedTreble,
+            p);
+    }
+
     void acceptAudio(float[] bands) {
         if (bands == null || bands.length == 0) return;
         int count = Math.min(levels.length, bands.length);
@@ -272,14 +290,6 @@ final class MusicVisualView extends View {
             if (draggingSlider) {
                 draggingSlider = false;
                 updateSliderFromTouch(x);
-                return true;
-            }
-            if (showDebugHud && debugHudRect.contains(x, y)) {
-                toggleDebugHud();
-                return true;
-            }
-            if (x <= MusicUi.dp(getContext(), 80) && y <= MusicUi.dp(getContext(), 80)) {
-                toggleDebugHud();
                 return true;
             }
             if (showControls) {

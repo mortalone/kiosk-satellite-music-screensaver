@@ -1,3 +1,11 @@
+# 0.1.21
+
+- **Organic Dancing Ferrofluid (Non-Symmetric)**: Replaced rigid star geometry with an organic, swirling magnetic fluid model. Features an anchored nucleus, orbiting dynamic lobes, and satellite tendrils that stretch into asymmetric shapes, split into separate droplets on drum kicks, and coalesce smoothly back under surface tension during quiet passages.
+- **Home Assistant Telemetry & Remote Debugger**:
+  - Published dedicated `audio_debug` text sensor reporting full diagnostic telemetry (track position, Sonos delay, frame age, last beat hit, bass/mid/treble, and pulse) directly to Home Assistant for effortless AI/developer verification.
+  - Published Home Assistant switch `debug_hud` (`switch.raspberry_raspberry_pi_4_music_screensaver_vis_synk_debugger_pa_skaerm`) allowing remote toggling of the on-screen HUD without any touch hotspots or screen tap triggers.
+  - Removed on-screen touch hotspots so the display remains completely clean and immune to accidental taps.
+
 # 0.1.20
 
 - **Ferrofluid Magnetic Modeling**: Completely overhauled `FluidModel` to anchor the droplet at center `(0, 0)` with 8 peripheral magnetic lobes. Replaced aimless Brownian wandering with authentic radial Rosensweig spikes that punch outward synchronously with drum kicks and basslines, relaxing back into a smooth droplet under surface tension during quiet passages.

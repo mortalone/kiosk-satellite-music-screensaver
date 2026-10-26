@@ -4,19 +4,22 @@ package me.jxl.kiosk.plugins.musicscreensaver;
 import java.util.Random;
 
 /**
- * Centered magnetic ferrofluid simulation.
+ * Organic, sound-reactive magnetic ferrofluid simulation.
  *
- * Models a central magnetic droplet with 8 peripheral magnetic lobes that
- * produce authentic Rosensweig instability spikes radially outward on beat hits
- * and contract into a single cohesive droplet under surface tension during quiet passages.
+ * Simulates a central magnetic nucleus with swirling, pulsating fluid lobes
+ * and satellite droplets that dance, stretch into asymmetric tendrils, split,
+ * and coalesce in response to audio frequency bands and beat transients.
  */
 final class FluidModel {
     static final int COUNT = 9;
     final float[] x = new float[COUNT], y = new float[COUNT];
     final float[] vx = new float[COUNT], vy = new float[COUNT], radius = new float[COUNT];
-    private final float[] baseAngle = new float[COUNT];
+    private final float[] phase = new float[COUNT];
+    private final float[] orbitSpeed = new float[COUNT];
+    private final float[] orbitDist = new float[COUNT];
     private final Random random;
     private float pulse, lastPulse;
+    private float fieldAngle = 0f;
 
     void setPulse(float value) {
         pulse = Math.max(0f, Math.min(1.5f, value));
@@ -24,20 +27,32 @@ final class FluidModel {
 
     FluidModel(long seed) {
         random = new Random(seed);
-        // Mass 0: Central anchor core
-        radius[0] = 0.155f;
+        // Mass 0: Central nucleus
+        radius[0] = 0.145f;
         x[0] = 0f;
         y[0] = 0f;
-        baseAngle[0] = 0f;
+        orbitDist[0] = 0f;
+        orbitSpeed[0] = 0f;
+        phase[0] = 0f;
 
-        // Masses 1..8: Radial magnetic lobes distributed evenly around the core
-        for (int i = 1; i < COUNT; i++) {
-            float angle = (float) ((i - 1) * (2.0 * Math.PI / 8.0));
-            baseAngle[i] = angle;
-            radius[i] = 0.070f + 0.006f * (i % 3);
-            float r0 = 0.11f;
-            x[i] = (float) Math.cos(angle) * r0;
-            y[i] = (float) Math.sin(angle) * r0;
+        // Masses 1..3: Primary inner fluid body (organic, dancing lobes)
+        for (int i = 1; i <= 3; i++) {
+            radius[i] = 0.082f + 0.008f * (i % 2);
+            orbitDist[i] = 0.075f + 0.02f * i;
+            orbitSpeed[i] = (i % 2 == 0 ? 1.4f : -1.2f) + (float) (random.nextGaussian() * 0.2);
+            phase[i] = (float) (i * (2.0 * Math.PI / 3.0));
+            x[i] = (float) Math.cos(phase[i]) * orbitDist[i];
+            y[i] = (float) Math.sin(phase[i]) * orbitDist[i];
+        }
+
+        // Masses 4..8: Outer satellite droplets & dynamic tendrils
+        for (int i = 4; i < COUNT; i++) {
+            radius[i] = 0.048f + 0.007f * (i % 3);
+            orbitDist[i] = 0.12f + 0.025f * (i - 4);
+            orbitSpeed[i] = ((i % 2 == 1) ? 2.1f : -1.8f) + 0.3f * (i - 4);
+            phase[i] = (float) (random.nextFloat() * 2.0 * Math.PI);
+            x[i] = (float) Math.cos(phase[i]) * orbitDist[i];
+            y[i] = (float) Math.sin(phase[i]) * orbitDist[i];
         }
     }
 
@@ -50,56 +65,65 @@ final class FluidModel {
         float kick = Math.max(0f, pulse - lastPulse);
         lastPulse = pulse;
 
-        // Core mass dynamics: tightly anchored at center (0, 0)
-        float coreFx = -x[0] * 35.0f;
-        float coreFy = -y[0] * 35.0f;
-        float coreDamp = (float) Math.exp(-dt * 6.0);
+        // Music rhythm advances the magnetic vortex angle
+        fieldAngle += dt * (0.8f + bass * 2.5f + mid * 1.5f);
+
+        // Core nucleus dynamics: slight breathing oscillation, anchored at center
+        float coreFx = -x[0] * 28.0f;
+        float coreFy = -y[0] * 28.0f;
+        float coreDamp = (float) Math.exp(-dt * 7.0);
         vx[0] = (vx[0] + coreFx * dt) * coreDamp;
         vy[0] = (vy[0] + coreFy * dt) * coreDamp;
         x[0] += vx[0] * dt;
         y[0] += vy[0] * dt;
 
-        // Peripheral lobes dynamics
-        float baseRestingR = 0.11f;
-        float energy = Math.min(1.2f, bass * 0.7f + mid * 0.3f);
+        float energy = Math.min(1.5f, bass * 0.7f + mid * 0.3f);
+        float stretchFactor = 1.0f + pulse * 1.6f + energy * 0.45f;
 
         for (int i = 1; i < COUNT; i++) {
-            float angle = baseAngle[i];
-            float cosA = (float) Math.cos(angle);
-            float sinA = (float) Math.sin(angle);
+            // Update organic orbit angle with music acceleration
+            phase[i] += dt * orbitSpeed[i] * (1.0f + bass * 2.2f + mid * 1.0f);
+            float a = phase[i] + fieldAngle * (i <= 3 ? 0.3f : 0.6f);
 
-            // Explosive radial pulse on beat hit (Rosensweig spike)
+            // Elliptical / asymmetric magnetic deformation
+            float ellipseDistort = 1.0f + 0.28f * (float) Math.sin(a * 2.0 + fieldAngle);
+            float currentTargetR = orbitDist[i] * stretchFactor * ellipseDistort;
+
+            float targetX = (float) Math.cos(a) * currentTargetR;
+            float targetY = (float) Math.sin(a) * currentTargetR;
+
+            // Explosive asymmetric pulse kick on drum beats
             if (kick > 0.02f) {
-                float spikeKick = kick * (2.8f + 0.5f * (i % 2));
-                vx[i] += cosA * spikeKick;
-                vy[i] += sinA * spikeKick;
+                float d = (float) Math.sqrt(x[i] * x[i] + y[i] * y[i] + 0.0001f);
+                float dirX = d > 0.01f ? x[i] / d : (float) Math.cos(a);
+                float dirY = d > 0.01f ? y[i] / d : (float) Math.sin(a);
+                // Radial kick plus swirling tangential whip
+                float kickStr = kick * (2.6f + 0.4f * (i % 3));
+                vx[i] += dirX * kickStr - dirY * kickStr * 0.35f;
+                vy[i] += dirY * kickStr + dirX * kickStr * 0.35f;
             }
 
-            // Radial target position driven by pulse and bass energy
-            float targetR = baseRestingR + pulse * 0.28f + energy * 0.09f;
-            float targetX = cosA * targetR;
-            float targetY = sinA * targetR;
+            // Magnetic spring force toward orbiting target
+            float springK = i <= 3 ? 18.0f : 12.0f;
+            float fx = (targetX - x[i]) * springK;
+            float fy = (targetY - y[i]) * springK;
 
-            // Restoring magnetic spring force toward radial target
-            float fx = (targetX - x[i]) * 24.0f;
-            float fy = (targetY - y[i]) * 24.0f;
-
-            // Acoustic treble micro-agitation
-            if (treble > 0.05f) {
-                fx += (random.nextFloat() - 0.5f) * treble * 1.5f;
-                fy += (random.nextFloat() - 0.5f) * treble * 1.5f;
+            // Acoustic treble surface jitter
+            if (treble > 0.04f) {
+                fx += (random.nextFloat() - 0.5f) * treble * 2.0f;
+                fy += (random.nextFloat() - 0.5f) * treble * 2.0f;
             }
 
-            // Surface tension repulsion from adjacent lobes to avoid collapse
+            // Inter-droplet surface tension and volume preservation
             for (int j = 1; j < COUNT; j++) {
                 if (i != j) {
                     float dx = x[i] - x[j];
                     float dy = y[i] - y[j];
                     float dSq = dx * dx + dy * dy + 0.0001f;
-                    float minSpacing = (radius[i] + radius[j]) * 0.85f;
+                    float minSpacing = (radius[i] + radius[j]) * 0.72f;
                     if (dSq < minSpacing * minSpacing) {
                         float d = (float) Math.sqrt(dSq);
-                        float push = (minSpacing - d) * 12.0f;
+                        float push = (minSpacing - d) * 14.0f;
                         fx += (dx / d) * push;
                         fy += (dy / d) * push;
                     }
@@ -107,14 +131,14 @@ final class FluidModel {
             }
 
             // Viscous fluid damping
-            float damp = (float) Math.exp(-dt * 5.2);
+            float damp = (float) Math.exp(-dt * (4.2f + (1f - Math.min(1f, energy)) * 2.5f));
             vx[i] = (vx[i] + fx * dt) * damp;
             vy[i] = (vy[i] + fy * dt) * damp;
 
             x[i] += vx[i] * dt;
             y[i] += vy[i] * dt;
 
-            // Container boundary constraint
+            // Boundary containment
             float d = (float) Math.sqrt(x[i] * x[i] + y[i] * y[i]);
             float bound = 0.76f - radius[i];
             if (d > bound) {
@@ -137,7 +161,7 @@ final class FluidModel {
         float f = 0;
         for (int i = 0; i < COUNT; i++) {
             float dx = px - x[i], dy = py - y[i];
-            float r = radius[i] * (1f + 0.35f * pulse);
+            float r = radius[i] * (1f + (i == 0 ? 0.35f : 0.22f) * pulse);
             f += (r * r) / (dx * dx + dy * dy + 0.0007f);
         }
         return f;
