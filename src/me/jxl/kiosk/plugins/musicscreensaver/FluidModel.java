@@ -20,7 +20,6 @@ final class FluidModel {
     private final Random random;
     private float pulse, lastPulse;
     private float fieldAngle = 0f;
-    private float currentBass = 0f, currentMid = 0f;
 
     void setPulse(float value) {
         pulse = Math.max(0f, Math.min(2.0f, value));
@@ -62,8 +61,6 @@ final class FluidModel {
         bass = finite(bass);
         mid = finite(mid);
         treble = finite(treble);
-        currentBass = bass;
-        currentMid = mid;
 
         float kick = Math.max(0f, pulse - lastPulse);
         lastPulse = pulse;
@@ -81,17 +78,15 @@ final class FluidModel {
         y[0] += vy[0] * dt;
 
         float energy = Math.min(1.2f, bass * 0.7f + mid * 0.3f);
-        // Continuous harmonic flow: even between beats, chords and bassline create smooth undulating waves
-        float flowWave = 0.07f * (float) Math.sin(fieldAngle * 2.2f);
-        float stretchFactor = 1.0f + pulse * 0.82f + energy * 0.22f + flowWave;
+        float stretchFactor = 1.0f + pulse * 1.05f + energy * 0.28f;
 
         for (int i = 1; i < COUNT; i++) {
             // Update organic orbit angle with gentle musical acceleration
-            phase[i] += dt * orbitSpeed[i] * (1.0f + bass * 0.50f + mid * 0.25f);
+            phase[i] += dt * orbitSpeed[i] * (1.0f + bass * 0.45f + mid * 0.20f);
             float a = phase[i] + fieldAngle * (i <= 3 ? 0.35f : 0.70f);
 
             // Dynamic asymmetric magnetic deformation
-            float ellipseDistort = 1.0f + 0.25f * (float) Math.sin(a * 2.0 + fieldAngle * 1.5);
+            float ellipseDistort = 1.0f + 0.22f * (float) Math.sin(a * 2.0 + fieldAngle * 1.5);
             float currentTargetR = orbitDist[i] * stretchFactor * ellipseDistort;
 
             float targetX = (float) Math.cos(a) * currentTargetR;
@@ -103,13 +98,13 @@ final class FluidModel {
                 float dirX = d > 0.01f ? x[i] / d : (float) Math.cos(a);
                 float dirY = d > 0.01f ? y[i] / d : (float) Math.sin(a);
                 // Outward radial punch + swirling whip
-                float kickStr = kick * (2.4f + 0.4f * (i % 3));
-                vx[i] += dirX * kickStr - dirY * kickStr * 0.30f;
-                vy[i] += dirY * kickStr + dirX * kickStr * 0.30f;
+                float kickStr = kick * (2.8f + 0.4f * (i % 3));
+                vx[i] += dirX * kickStr - dirY * kickStr * 0.25f;
+                vy[i] += dirY * kickStr + dirX * kickStr * 0.25f;
             }
 
             // Magnetic spring force toward orbiting target
-            float springK = i <= 3 ? 15.0f : 9.5f;
+            float springK = i <= 3 ? 18.0f : 12.0f;
             float fx = (targetX - x[i]) * springK;
             float fy = (targetY - y[i]) * springK;
 
@@ -135,8 +130,8 @@ final class FluidModel {
                 }
             }
 
-            // Natural viscous fluid damping with inertia (prevents premature freezing between beats)
-            float damp = (float) Math.exp(-dt * (2.8f + (1f - Math.min(1f, energy)) * 1.5f));
+            // Viscous fluid damping
+            float damp = (float) Math.exp(-dt * (3.8f + (1f - Math.min(1f, energy)) * 1.8f));
             vx[i] = (vx[i] + fx * dt) * damp;
             vy[i] = (vy[i] + fy * dt) * damp;
 
@@ -164,11 +159,9 @@ final class FluidModel {
 
     float field(float px, float py) {
         float f = 0;
-        // Continuous audio breath: bass and mid frequencies keep droplets plump and alive even between beats
-        float audioBreath = currentBass * 0.20f + currentMid * 0.12f;
         for (int i = 0; i < COUNT; i++) {
             float dx = px - x[i], dy = py - y[i];
-            float r = radius[i] * (1f + (i == 0 ? 0.35f : 0.25f) * pulse + (i <= 3 ? 0.18f : 0.26f) * audioBreath);
+            float r = radius[i] * (1f + (i == 0 ? 0.38f : 0.28f) * pulse);
             f += (r * r) / (dx * dx + dy * dy + 0.0007f);
         }
         return f;

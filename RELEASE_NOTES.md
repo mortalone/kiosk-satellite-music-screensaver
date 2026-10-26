@@ -1,3 +1,9 @@
+# 0.1.25
+
+- **Pure Beat Reactivity & Synthetic Wave Elimination**: Removed synthetic sine oscillation (`flowWave`) that moved to an artificial mathematical clock detached from the music. The ferrofluid is now 100% physically driven by live incoming beat transients (`pulse`) and real frequency energy (`bass`/`mid`).
+- **Unrestricted Transient Sensitivity**: Removed the artificial `minAttackFlux` gate that previously filtered out 85% of real drum hits (dropping BPM to 17-32 BPM). Restored natural rising-edge detection (`diff > 0 && linBass > previous`) with a clean 180ms hold-off (~333 BPM max) to prevent sub-bass double-triggering while capturing every musical beat.
+- **Dynamic Droplet Ejection**: Enhanced radial pulse stretch (`pulse * 1.05`) so the outer fluid lobes actively punch outward, split into separate droplets on drum kicks, and snap back elastically under surface tension.
+
 # 0.1.24
 
 - **Eliminated 450ms Hard Cutoff Cliff**: Removed premature `elapsed > 450ms` pulse zeroing in `AudioEnvelope.pulse()`. Songs at 80–110 BPM (where beats are 550–750ms apart) previously suffered an artificial 150–250ms "dead zone" where pulse dropped to 0 before the next beat arrived. Now uses continuous exponential fade bridging seamlessly from beat to beat.

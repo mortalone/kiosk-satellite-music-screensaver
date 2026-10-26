@@ -50,18 +50,11 @@ final class AudioEnvelope {
         floor = Math.min(floor, peak * 0.55f);
 
         float dynamicRange = Math.max(0.08f, peak - floor);
-        // Sensitive yet selective threshold: upper 65% of dynamic range catches groove accents and syncopations
-        float threshold = floor + dynamicRange * 0.34f;
+        float threshold = floor + dynamicRange * 0.25f;
         float diff = linBass - threshold;
-        float onset = linBass - previous;
-        // Require transient onset attack flux (rejects gradual bass swells and continuous drone)
-        float minAttackFlux = Math.max(0.020f, dynamicRange * 0.08f);
 
-        // Beat hit:
-        // 1. Minimum 220ms between beats (~272 BPM max) - strictly prevents sub-bass tail double-triggering
-        // 2. Above adaptive dynamic threshold
-        // 3. Positive onset attack flux
-        if (now - hit >= 220 && diff > 0 && onset >= minAttackFlux) {
+        // Beat hit: minimum 180ms between beats (~333 BPM max), above adaptive threshold, rising slope
+        if (now - hit >= 180 && diff > 0 && linBass > previous) {
             strength = Math.min(1.6f, Math.max(0.50f, 0.50f + (diff / dynamicRange) * 1.1f));
             hit = now;
             beatCount++;
@@ -74,10 +67,9 @@ final class AudioEnvelope {
     float pulse(long now) {
         if (last < 0 || now - last > 600) return 0f;
         long elapsed = Math.max(0, now - hit);
-        // Continuous organic exponential fade: no abrupt 450ms hard step cliff!
-        if (elapsed > 1200) return 0f;
-        // Natural 240ms decay: smoothly bridges between beats at 90-120 BPM without sudden pauses
-        return strength * (float) Math.exp(-elapsed / 240f);
+        if (elapsed > 600) return 0f;
+        // Snappy, musical 180ms exponential decay
+        return strength * (float) Math.exp(-elapsed / 180f);
     }
 
     long getHitTime() {
