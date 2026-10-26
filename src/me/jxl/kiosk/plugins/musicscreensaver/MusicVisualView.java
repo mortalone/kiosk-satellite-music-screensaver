@@ -53,7 +53,17 @@ final class MusicVisualView extends View {
     private Bitmap blurredBg;
     private int dominantColor = 0xFF1A212D;
     private double positionSeconds = 0;
+    private double trackDuration = 0;
     private long anchorTime = 0;
+
+    private boolean showDebugHud = false;
+    private int effectiveSyncDelayMs = 0;
+    private String syncStatusText = "";
+    private long lastBeatWallTime = 0;
+    private double lastBeatTrackTime = 0;
+    private float lastBeatStrength = 0;
+    private long lastHitRegistered = -1;
+    private final RectF debugHudRect = new RectF();
 
     private final float[] levels = new float[32];
     private final float[] smoothedLevels = new float[32];
@@ -73,6 +83,8 @@ final class MusicVisualView extends View {
         invalidate();
     }
     void setVinylLight(String value){backlit.mode=value;invalidate();}
+    void toggleDebugHud(){showDebugHud=!showDebugHud;invalidate();}
+    void setSyncInfo(int delayMs,String syncStatus){this.effectiveSyncDelayMs=delayMs;this.syncStatusText=syncStatus==null?"":syncStatus;}
     private final FluidRenderer fluid = new FluidRenderer();
     // Interactive hit rects
     private final RectF prevRect = new RectF();
@@ -115,10 +127,15 @@ final class MusicVisualView extends View {
     }
 
     void updateTrack(String title, String artist, Bitmap cover, boolean isPlaying, double position) {
+        updateTrack(title, artist, cover, isPlaying, position, this.trackDuration);
+    }
+
+    void updateTrack(String title, String artist, Bitmap cover, boolean isPlaying, double position, double duration) {
         this.trackTitle = title == null ? "" : title;
         this.trackArtist = artist == null ? "" : artist;
         this.playing = isPlaying;
         this.positionSeconds = position;
+        this.trackDuration = duration;
         this.anchorTime = SystemClock.elapsedRealtime();
 
         if (cover != this.coverArt) {
@@ -160,7 +177,15 @@ final class MusicVisualView extends View {
 
     String audioStatus(){
         long age=SystemClock.elapsedRealtime()-lastAudioFrameAt;
-        return age>1200?"Ingen live lyddata":String.format(java.util.Locale.ROOT,"Live · bas %.2f · puls %.2f",smoothedBass,audioEnvelope.pulse(SystemClock.elapsedRealtime()));
+        if(age>1200)return "Ingen live lyddata";
+        float p=audioEnvelope.pulse(SystemClock.elapsedRealtime());
+        long sinceHit=lastBeatWallTime>0?(System.currentTimeMillis()-lastBeatWallTime):-1;
+        if(sinceHit>=0&&sinceHit<4000){
+            return String.format(java.util.Locale.ROOT,"Live · spor %s · beat @ %s (%.2f) · bas %.2f · synk %dms",
+                    formatDetailedTime(elapsedSeconds()),formatDetailedTime(lastBeatTrackTime),lastBeatStrength,smoothedBass,effectiveSyncDelayMs);
+        }
+        return String.format(java.util.Locale.ROOT,"Live · spor %s · bas %.2f · puls %.2f · synk %dms",
+                formatDetailedTime(elapsedSeconds()),smoothedBass,p,effectiveSyncDelayMs);
     }
 
     void acceptAudio(float[] bands) {
@@ -169,8 +194,19 @@ final class MusicVisualView extends View {
         float gainMult = .45f + gain * .45f;
         float rawBass=0;
         for(int i=0;i<Math.min(6,count);i++)if(Float.isFinite(bands[i]))rawBass+=Math.max(0,bands[i]);
-        audioEnvelope.feed(rawBass/Math.max(1,Math.min(6,count)),SystemClock.elapsedRealtime());
-        lastAudioFrameAt = SystemClock.elapsedRealtime();
+        long now = SystemClock.elapsedRealtime();
+        audioEnvelope.feed(rawBass/Math.max(1,Math.min(6,count)),now);
+        lastAudioFrameAt = now;
+        long hitTime = audioEnvelope.getHitTime();
+        if (hitTime > lastHitRegistered) {
+            lastHitRegistered = hitTime;
+            lastBeatWallTime = System.currentTimeMillis();
+            lastBeatTrackTime = elapsedSeconds();
+            lastBeatStrength = audioEnvelope.getStrength();
+            android.util.Log.d("MusicScreensaver", String.format(java.util.Locale.ROOT,
+                    "BEAT HIT: track=%.3fs wall=%d str=%.2f bass=%.2f sync=%dms",
+                    lastBeatTrackTime, lastBeatWallTime, lastBeatStrength, smoothedBass, effectiveSyncDelayMs));
+        }
         for(int i=count;i<levels.length;i++)levels[i]=0;
         for (int i = 0; i < count; i++) {
             float v = bands[i];
@@ -236,6 +272,14 @@ final class MusicVisualView extends View {
             if (draggingSlider) {
                 draggingSlider = false;
                 updateSliderFromTouch(x);
+                return true;
+            }
+            if (showDebugHud && debugHudRect.contains(x, y)) {
+                toggleDebugHud();
+                return true;
+            }
+            if (x <= MusicUi.dp(getContext(), 80) && y <= MusicUi.dp(getContext(), 80)) {
+                toggleDebugHud();
                 return true;
             }
             if (showControls) {
@@ -324,9 +368,108 @@ final class MusicVisualView extends View {
         // 4. Draw Controls & Volume Slider
         drawControls(canvas, w, h, isPortrait, isSplit);
 
-        if (playing || "ferrofluid".equals(effect) || "hybrid_ferrofluid".equals(effect) || "cotodama".equals(effect)) {
+        // 5. Draw Debug HUD (Telemetry overlay)
+        if (showDebugHud) {
+            drawDebugHud(canvas, w, h);
+        }
+
+        if (playing || showDebugHud || "ferrofluid".equals(effect) || "hybrid_ferrofluid".equals(effect) || "cotodama".equals(effect)) {
             postInvalidateDelayed(economy ? 66 : 40);
         }
+    }
+
+    private void drawDebugHud(Canvas c, float w, float h) {
+        float density = getResources().getDisplayMetrics().density;
+        float hudW = Math.min(w - 24 * density, 340 * density);
+        float hudH = 120 * density;
+        float left = 12 * density;
+        float top = 12 * density;
+        debugHudRect.set(left, top, left + hudW, top + hudH);
+
+        // Card backdrop
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xD60F1722);
+        c.drawRoundRect(debugHudRect, 8 * density, 8 * density, paint);
+
+        // Card border
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(1.2f * density);
+        paint.setColor(0x6665E5CF);
+        c.drawRoundRect(debugHudRect, 8 * density, 8 * density, paint);
+
+        paint.setStyle(Paint.Style.FILL);
+        paint.setTextAlign(Paint.Align.LEFT);
+
+        float textX = left + 12 * density;
+        float y = top + 18 * density;
+
+        // Title & Close label
+        paint.setTextSize(10 * density);
+        paint.setFakeBoldText(true);
+        paint.setColor(0xFF65E5CF);
+        c.drawText("SYNC & BEAT TELEMETRI", textX, y, paint);
+
+        paint.setTextAlign(Paint.Align.RIGHT);
+        paint.setColor(0x88CAD4DF);
+        paint.setFakeBoldText(false);
+        c.drawText("Tryk for at lukke", left + hudW - 12 * density, y, paint);
+
+        paint.setTextAlign(Paint.Align.LEFT);
+        y += 18 * density;
+
+        // Track time
+        paint.setTextSize(12 * density);
+        paint.setFakeBoldText(true);
+        paint.setColor(0xFFFFFFFF);
+        String trackStr = formatDetailedTime(elapsedSeconds());
+        if (trackDuration > 0) trackStr += " / " + formatDetailedTime(trackDuration);
+        c.drawText("Spor: " + trackStr, textX, y, paint);
+
+        y += 17 * density;
+        paint.setFakeBoldText(false);
+        paint.setTextSize(11 * density);
+        paint.setColor(0xFFE2E8F0);
+        String syncStr = effectiveSyncDelayMs > 0
+                ? (effectiveSyncDelayMs + " ms (" + (syncStatusText.isEmpty() ? "Sonos buffer" : syncStatusText) + ")")
+                : "0 ms (direkte)";
+        c.drawText("Forsinkelse: " + syncStr, textX, y, paint);
+
+        y += 17 * density;
+        long age = lastAudioFrameAt > 0 ? (SystemClock.elapsedRealtime() - lastAudioFrameAt) : -1;
+        float pulse = audioEnvelope.pulse(SystemClock.elapsedRealtime());
+        paint.setColor(0xFFCAD4DF);
+        c.drawText(String.format(java.util.Locale.ROOT, "Data: %dms | Bas: %.2f | Puls: %.2f", age, smoothedBass, pulse), textX, y, paint);
+
+        y += 20 * density;
+        // Beat hit circle indicator
+        float indR = 5.5f * density;
+        float indX = textX + indR;
+        float indY = y - 4 * density;
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(pulse > 0.08f ? 0xFF00E676 : 0xFF37474F);
+        c.drawCircle(indX, indY, indR, paint);
+
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setColor(pulse > 0.08f ? 0xFF69F0AE : 0xFF546E7A);
+        paint.setStrokeWidth(1.2f * density);
+        c.drawCircle(indX, indY, indR + 1.8f * density, paint);
+
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xFFFFFFFF);
+        paint.setTextSize(10.5f * density);
+        String beatStr = lastBeatTrackTime > 0
+                ? String.format(java.util.Locale.ROOT, "Sidste beat: %s (styrke: %.2f)", formatDetailedTime(lastBeatTrackTime), lastBeatStrength)
+                : "Sidste beat: afventer...";
+        c.drawText(beatStr, indX + 11 * density, y, paint);
+    }
+
+    private String formatDetailedTime(double seconds) {
+        if (Double.isNaN(seconds) || seconds < 0) return "00:00.000";
+        int totalMs = (int) (seconds * 1000.0);
+        int m = totalMs / 60000;
+        int s = (totalMs % 60000) / 1000;
+        int ms = totalMs % 1000;
+        return String.format(java.util.Locale.ROOT, "%02d:%02d.%03d", m, s, ms);
     }
 
     private void drawBackground(Canvas c, float w, float h) {

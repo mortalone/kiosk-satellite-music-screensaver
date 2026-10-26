@@ -125,9 +125,14 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
                     postponeKioskScreensaver();
                 }
                 notifyAudioPresentation();
-                if(visualView!=null)try{host.publishTextSensor("audio_status","Lyddata",visualView.audioStatus());
+                if(visualView!=null)try{
                     String sync=context.getSharedPreferences("spectrum_visualizer_preferences",Context.MODE_PRIVATE).getString("sync_status_summary","");
-                    host.publishTextSensor("audio_sync","Lydsynkronisering",sync.isEmpty()?"Ingen synkroniseringsstatus fra Spectrum Visualizer":sync);}catch(Exception ignored){}
+                    int delay=0;
+                    try{String[] p=sync.split("\\|");if(p.length>=3)delay=Integer.parseInt(p[2].trim());}catch(Exception ignored){}
+                    visualView.setSyncInfo(delay,sync);
+                    host.publishTextSensor("audio_status","Lyddata",visualView.audioStatus());
+                    host.publishTextSensor("audio_sync","Lydsynkronisering",sync.isEmpty()?"Ingen synkroniseringsstatus fra Spectrum Visualizer":sync);
+                }catch(Exception ignored){}
             }
             main.postDelayed(this, 1000);
         }
@@ -275,6 +280,8 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         } else if ("toggleVolume".equals(id)) {
             volumeControls = "Off".equals(volumeControls) ? "Slider" : "Off";
             if (visualView != null) visualView.configure(effect, vinylStyle, ferrofluidColor, backgroundTheme, showPlaybackControls, volumeControls, tapDismiss, settingEconomy, gain);
+        } else if ("toggleDebugHud".equals(id)) {
+            if (visualView != null) visualView.toggleDebugHud();
         }
     }
 
@@ -422,7 +429,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         }
 
         if (visualView != null) {
-            visualView.updateTrack(trackTitle, trackArtist, currentCover, isPlaying, estimatedPosition());
+            visualView.updateTrack(trackTitle, trackArtist, currentCover, isPlaying, estimatedPosition(), trackDuration);
         }
         if (lyricsView != null) {
             lyricsView.setTrackInfo(trackTitle, trackArtist);
