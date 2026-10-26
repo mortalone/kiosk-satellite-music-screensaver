@@ -63,6 +63,17 @@ public final class MusicScreensaverTest {
         check(envelope.pulse(1280)>0,"Pulse survives between frames");
         check(envelope.pulse(2000)==0,"Missing audio clears pulse");
 
+        // Verify loud passage lockout immunity: kicks must register reliably over continuous bass
+        for(int i=0;i<60;i++)envelope.feed(.75f, 2500 + i*40);
+        int initialHits = envelope.getBeatCount();
+        for (int bar = 0; bar < 4; bar++) {
+            long t = 5000 + bar * 500;
+            envelope.feed(.65f, t - 40);
+            envelope.feed(.98f, t);
+            envelope.feed(.70f, t + 40);
+        }
+        check(envelope.getBeatCount() >= initialHits + 4, "Loud sustained passages cannot lockout beat detection");
+
         java.util.List<int[]> words=LyricMotion.ranges("Hej verden!",false);
         check(words.size()==2&&words.get(1)[1]==11,"Word animation retains punctuation");
         java.util.List<int[]> letters=LyricMotion.ranges("a\u030a😀",true);

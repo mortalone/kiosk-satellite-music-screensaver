@@ -1,3 +1,10 @@
+# 0.1.22
+
+- **Lockout-Free Dual Envelope Follower**: Replaced single-baseline tracking with an adaptive dual-envelope system (fast-attack peak follower and floor/trough tracker) with guaranteed dynamic headroom (`floor <= 0.55 * peak`). Completely eliminates beat lockout during loud or sustained passages, ensuring crisp beat detection on every kick drum across all musical genres.
+- **Musical Velocity Stabilization**: Calibrated magnetic vortex and droplet orbit velocities to natural musical tempos (~8-18 RPM), ending hyper-speed rotational blur. Input frequency bands to fluid physics are cleanly normalized, preventing high user gain multipliers from turning the fluid into a chaotic blender.
+- **Beat-Reactive Droplet Splitting & Snapping**: Tied beat transients (`kick` and `pulse`) directly to radial stretch and asymmetric tendril release. On heavy kick drum punches, droplets burst outward and split into isolated satellites, snapping back elastically under magnetic surface tension as the transient decays.
+- **Enhanced Telemetry Counter**: Added live beat counter `#%d` to `audio_debug` Home Assistant sensor (`sensor.raspberry_raspberry_pi_4_music_screensaver_lydsynk_telemetri`), allowing instant verification of continuous beat detection directly from Home Assistant.
+
 # 0.1.21
 
 - **Organic Dancing Ferrofluid (Non-Symmetric)**: Replaced rigid star geometry with an organic, swirling magnetic fluid model. Features an anchored nucleus, orbiting dynamic lobes, and satellite tendrils that stretch into asymmetric shapes, split into separate droplets on drum kicks, and coalesce smoothly back under surface tension during quiet passages.

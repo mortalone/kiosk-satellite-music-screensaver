@@ -8,7 +8,8 @@ package me.jxl.kiosk.plugins.musicscreensaver;
  * room acoustics without locking out during loud passages.
  */
 final class AudioEnvelope {
-    private float baseline = 0.2f;
+    private float peak = 0.5f;
+    private float floor = 0.1f;
     private float previous = 0f;
     private float strength = 0f;
     private long last = -1;
@@ -18,10 +19,11 @@ final class AudioEnvelope {
     void feed(float rawBass, long now) {
         float bass = Float.isFinite(rawBass) ? Math.max(0f, rawBass) : 0f;
         // Non-linear power expansion to separate drum kicks from baseline hum
-        float linBass = (float) Math.pow(Math.min(1.8f, bass), 2.5f);
+        float linBass = (float) Math.pow(Math.min(1.8f, bass), 2.2f);
 
         if (last < 0 || now - last > 500) {
-            baseline = linBass;
+            peak = Math.max(0.3f, linBass);
+            floor = Math.max(0.02f, linBass * 0.3f);
             previous = linBass;
             strength = 0;
             last = now;
@@ -29,28 +31,44 @@ final class AudioEnvelope {
         }
 
         float dt = Math.max(0.001f, Math.min(0.25f, (now - last) / 1000f));
-        float diff = linBass - baseline;
-        float dynamicThreshold = Math.max(0.035f, baseline * 0.16f);
 
-        // Beat hit: minimum 110ms between beats (~545 BPM max), above adaptive threshold, rising
-        if (now - hit >= 110 && diff > dynamicThreshold && linBass > previous) {
-            strength = Math.min(1.5f, Math.max(0.35f, diff / Math.max(0.04f, baseline * 0.45f)));
+        // Peak tracker: instant attack, slow decay (~700ms)
+        if (linBass > peak) {
+            peak = linBass;
+        } else {
+            peak -= (peak - linBass) * (1f - (float) Math.exp(-dt / 0.70f));
+        }
+        peak = Math.max(0.20f, peak);
+
+        // Floor tracker: instant drop to inter-beat troughs, slow rise (~900ms)
+        if (linBass < floor) {
+            floor = linBass;
+        } else {
+            floor += (linBass - floor) * (1f - (float) Math.exp(-dt / 0.90f));
+        }
+        // Ensure dynamic headroom: floor can never exceed 55% of peak (eliminates lockout)
+        floor = Math.min(floor, peak * 0.55f);
+
+        float dynamicRange = Math.max(0.08f, peak - floor);
+        float threshold = floor + dynamicRange * 0.28f;
+        float diff = linBass - threshold;
+
+        // Beat hit: minimum 115ms between beats (~520 BPM max), above adaptive threshold, rising slope
+        if (now - hit >= 115 && diff > 0 && linBass > previous) {
+            strength = Math.min(1.5f, Math.max(0.40f, 0.40f + (diff / dynamicRange) * 1.1f));
             hit = now;
             beatCount++;
         }
 
-        // Adaptive baseline tracks background loudness
-        float timeConstant = linBass > baseline ? 1.2f : 0.45f;
-        baseline += (linBass - baseline) * (1f - (float) Math.exp(-dt / timeConstant));
         previous = linBass;
         last = now;
     }
 
     float pulse(long now) {
-        if (last < 0 || now - last > 500) return 0f;
+        if (last < 0 || now - last > 600) return 0f;
         long elapsed = Math.max(0, now - hit);
-        if (elapsed > 400) return 0f;
-        return strength * (float) Math.exp(-elapsed / 160f);
+        if (elapsed > 450) return 0f;
+        return strength * (float) Math.exp(-elapsed / 170f);
     }
 
     long getHitTime() {
@@ -62,7 +80,7 @@ final class AudioEnvelope {
     }
 
     float getBaseline() {
-        return baseline;
+        return floor;
     }
 
     int getBeatCount() {

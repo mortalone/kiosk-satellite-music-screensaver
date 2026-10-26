@@ -193,11 +193,12 @@ final class MusicVisualView extends View {
         long age = SystemClock.elapsedRealtime() - lastAudioFrameAt;
         float p = audioEnvelope.pulse(SystemClock.elapsedRealtime());
         return String.format(java.util.Locale.ROOT,
-            "Spor %s/%s · Sync %dms · Alder %dms · Beat @ %s (%.2f) · Bas %.2f · Mid %.2f · Treb %.2f · Puls %.2f",
+            "Spor %s/%s · Sync %dms · Alder %dms · Beat #%d @ %s (%.2f) · Bas %.2f · Mid %.2f · Treb %.2f · Puls %.2f",
             formatDetailedTime(elapsedSeconds()),
             formatDetailedTime(trackDuration),
             effectiveSyncDelayMs,
             age,
+            audioEnvelope.getBeatCount(),
             (lastBeatTrackTime > 0 ? formatDetailedTime(lastBeatTrackTime) : "afventer"),
             lastBeatStrength,
             smoothedBass,
@@ -222,8 +223,8 @@ final class MusicVisualView extends View {
             lastBeatTrackTime = elapsedSeconds();
             lastBeatStrength = audioEnvelope.getStrength();
             android.util.Log.d("MusicScreensaver", String.format(java.util.Locale.ROOT,
-                    "BEAT HIT: track=%.3fs wall=%d str=%.2f bass=%.2f sync=%dms",
-                    lastBeatTrackTime, lastBeatWallTime, lastBeatStrength, smoothedBass, effectiveSyncDelayMs));
+                    "BEAT HIT #%d: track=%.3fs wall=%d str=%.2f bass=%.2f sync=%dms",
+                    audioEnvelope.getBeatCount(), lastBeatTrackTime, lastBeatWallTime, lastBeatStrength, smoothedBass, effectiveSyncDelayMs));
         }
         for(int i=count;i<levels.length;i++)levels[i]=0;
         for (int i = 0; i < count; i++) {
@@ -260,8 +261,16 @@ final class MusicVisualView extends View {
         smoothedMid = midSum / 12.0f;
         smoothedTreble = trebleSum / 14.0f;
 
-        fluid.setPulse(playing?Math.min(1.5f,audioEnvelope.pulse(SystemClock.elapsedRealtime())*(.35f+gain*.17f)):0);
-        fluid.step(dt, smoothedBass, smoothedMid, smoothedTreble);
+        float gainMult = .45f + gain * .45f;
+        float normBass = Math.min(1.2f, smoothedBass / Math.max(0.5f, gainMult));
+        float normMid = Math.min(1.2f, smoothedMid / Math.max(0.5f, gainMult));
+        float normTreble = Math.min(1.2f, smoothedTreble / Math.max(0.5f, gainMult));
+
+        float rawPulse = audioEnvelope.pulse(SystemClock.elapsedRealtime());
+        float scaledPulse = playing ? Math.min(1.8f, rawPulse * (0.65f + gain * 0.09f)) : 0f;
+
+        fluid.setPulse(scaledPulse);
+        fluid.step(dt, normBass, normMid, normTreble);
 
     }
 
