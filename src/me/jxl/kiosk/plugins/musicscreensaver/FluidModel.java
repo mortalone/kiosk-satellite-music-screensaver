@@ -67,10 +67,10 @@ final class FluidModel {
         lastPulse = pulse;
 
         currentEnergy = Math.min(1.2f, bass * 0.7f + mid * 0.3f);
-        float stretchFactor = 1.0f + pulse * 1.05f + currentEnergy * 0.28f;
+        float stretchFactor = 1.0f + pulse * 0.45f + currentEnergy * 0.20f;
 
         // Music rhythm advances the magnetic vortex angle with audio energy
-        float motionRate = 0.12f + currentEnergy * 0.88f + pulse * 0.35f;
+        float motionRate = 0.20f + currentEnergy * 0.55f + pulse * 0.20f;
         fieldAngle += dt * motionRate * 0.75f;
 
         // Core nucleus dynamics: slight breathing oscillation, anchored at center
@@ -100,7 +100,7 @@ final class FluidModel {
                 float dirX = d > 0.01f ? x[i] / d : (float) Math.cos(a);
                 float dirY = d > 0.01f ? y[i] / d : (float) Math.sin(a);
                 // Outward radial punch + swirling whip
-                float kickStr = kick * (2.8f + 0.4f * (i % 3));
+                float kickStr = kick * (1.1f + 0.2f * (i % 3));
                 vx[i] += dirX * kickStr - dirY * kickStr * 0.25f;
                 vy[i] += dirY * kickStr + dirX * kickStr * 0.25f;
             }
@@ -163,7 +163,7 @@ final class FluidModel {
         float f = 0;
         for (int i = 0; i < COUNT; i++) {
             float dx = px - x[i], dy = py - y[i];
-            float r = radius[i] * (1f + (i == 0 ? 0.38f : 0.28f) * pulse + (i == 0 ? 0.12f : 0.20f) * currentEnergy);
+            float r = radius[i] * (1f + (i == 0 ? 0.25f : 0.20f) * pulse + (i == 0 ? 0.10f : 0.16f) * currentEnergy);
             f += (r * r) / (dx * dx + dy * dy + 0.0007f);
         }
         return f;

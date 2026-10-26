@@ -3,7 +3,7 @@
   "apiVersion": 1,
   "id": "music-screensaver",
   "name": "Music Screensaver",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "minAndroidSdk": 26,
   "entryClass": "me.jxl.kiosk.plugins.musicscreensaver.MusicScreensaverPlugin",
   "description": "High-aesthetic music screensaver for Kiosk Satellite featuring rotating vinyl turntable, sound-reactive ferrofluid, Cotodama kinetic lyrics, and hybrid split-stage layouts with smart touch-dismiss.",

@@ -19,7 +19,7 @@ final class AudioEnvelope {
     void feed(float rawBass, long now) {
         float bass = Float.isFinite(rawBass) ? Math.max(0f, rawBass) : 0f;
         // Absolute noise gate: silence, acoustic pauses, and digital line noise cannot trigger beats
-        if (bass < 0.12f) {
+        if (bass < 0.18f) {
             float dt = last > 0 ? Math.max(0.001f, Math.min(0.25f, (now - last) / 1000f)) : 0.04f;
             peak -= peak * (1f - (float) Math.exp(-dt / 0.70f));
             floor -= floor * (1f - (float) Math.exp(-dt / 0.90f));
@@ -59,12 +59,12 @@ final class AudioEnvelope {
         floor = Math.min(floor, peak * 0.55f);
 
         float dynamicRange = Math.max(0.08f, peak - floor);
-        float threshold = floor + dynamicRange * 0.25f;
+        float threshold = floor + dynamicRange * 0.35f;
         float diff = linBass - threshold;
 
-        // Beat hit: minimum 180ms between beats (~333 BPM max), above adaptive threshold, rising slope
-        if (now - hit >= 180 && diff > 0 && linBass > previous) {
-            strength = Math.min(1.6f, Math.max(0.50f, 0.50f + (diff / dynamicRange) * 1.1f));
+        // Beat hit: minimum 240ms between beats (~250 BPM max) eliminates double pulsing on sub-bass resonance, rising slope
+        if (now - hit >= 240 && diff > 0 && linBass > previous) {
+            strength = Math.min(1.3f, Math.max(0.50f, 0.50f + (diff / dynamicRange) * 0.85f));
             hit = now;
             beatCount++;
         }
