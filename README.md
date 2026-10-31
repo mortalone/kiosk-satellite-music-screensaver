@@ -95,3 +95,21 @@ Synchronization review: Twinkly's sendspin_source.py schedules timestamped frame
 ## Justerbar detaljegrad (0.1.18)
 
 The existing fluidQuality setting is now “Detaljegrad · ferrofluid og vinyl”. Existing values and default High are preserved. Eco/High/Ultra/Native also set backlit texture resolution to 256/640/1024/1536 and vinyl groove counts to 8/14/28/40 (backlit: 24/65/96/128). Texture regeneration happens only on quality/pattern change. Text and covers stay sharp. FPS, gain and speaker delay are unchanged. Still 20 settings.
+
+
+### Backlit vinyl · 0.1.30
+
+Choose **Vinyl visning** while using Vinyl or Hybrid Vinyl:
+
+| Design | Material |
+| --- | --- |
+| Backlit Splatter | Irregular dark pigment islands and illuminated openings |
+| Backlit Mosaic | Cyan and amber glass-like chips with dark borders |
+| Backlit Sunburst | Irregular radial streaks of varying lengths |
+| Backlit Marble | Warped flowing pigment veins |
+| Backlit Colour Sectors | Broad contrasting sectors with splatter |
+| Backlit Translucent | Quiet translucent pressing with a luminous rim |
+
+**Gennemlyst vinyl: lys → Music** adds pulses from the same synchronized beat envelope used by ferrofluid. Bass controls sustained light and treble adds local illumination. A live audio source is required for those reactions; colour flow itself is decorative. **Flow** slowly changes colour; **Album** holds the album hue. The material stays stationary in all three modes. No further HA helpers or settings are needed.
+
+Detail quality still applies to all six materials. Generation happens off the UI thread; when changing style or quality, the previous material remains briefly until the replacement is ready. These are procedural interpretations of illuminated vinyl, not photographs of a product.

@@ -3,7 +3,7 @@
   "apiVersion": 1,
   "id": "music-screensaver",
   "name": "Music Screensaver",
-  "version": "0.1.29",
+  "version": "0.1.30",
   "minAndroidSdk": 26,
   "entryClass": "me.jxl.kiosk.plugins.musicscreensaver.MusicScreensaverPlugin",
   "description": "High-aesthetic music screensaver for Kiosk Satellite featuring rotating vinyl turntable, sound-reactive ferrofluid, Cotodama kinetic lyrics, and hybrid split-stage layouts with smart touch-dismiss.",
@@ -79,10 +79,12 @@
         "Backlit Splatter",
         "Backlit Marble",
         "Backlit Sunburst",
-        "Backlit Translucent"
+        "Backlit Translucent",
+        "Backlit Mosaic",
+        "Backlit Colour Sectors"
       ],
       "group": "Appearance",
-      "description": "Klassisk plade, minimal plade eller gennemlyst splatter-vinyl inspireret af Vylumi."
+      "description": "Klassisk vinyl eller bagbelyst Splatter, Marble, Sunburst, Translucent, Mosaic og Colour Sectors."
     },
     {
       "key": "ferrofluidColor",

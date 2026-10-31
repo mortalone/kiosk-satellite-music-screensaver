@@ -3,6 +3,28 @@ package me.jxl.kiosk.plugins.musicscreensaver;
 
 public final class MusicScreensaverTest {
     public static void main(String[] args) {
+        String[] designs={"Backlit Splatter","Backlit Mosaic","Backlit Sunburst",
+                "Backlit Marble","Backlit Colour Sectors","Backlit Translucent"};
+        java.util.Set<Long> fingerprints=new java.util.HashSet<Long>();
+        for(String design:designs){
+            long fingerprint=1;int transparent=0,opaque=0;
+            check(VinylMaterial.pixel(design,1.01,0)==0,"Transparent outside disc");
+            for(int y=0;y<64;y++)for(int x=0;x<64;x++){
+                double xx=(x-31.5)/32,yy=(y-31.5)/32;
+                int pixel=VinylMaterial.pixel(design,xx,yy);
+                check(pixel==VinylMaterial.pixel(design,xx,yy),"Stationary deterministic pigment");
+                if(Math.hypot(xx,yy)<.95){
+                    int alpha=pixel>>>24;
+                    if(alpha<110)transparent++;
+                    if(alpha>180)opaque++;
+                }
+                fingerprint=fingerprint*31+pixel;
+            }
+            check(transparent>50,"Light can pass through each design");
+            if(design.equals("Backlit Splatter")||design.equals("Backlit Mosaic"))
+                check(opaque>50,"Pigment preserves dark contrast");
+            check(fingerprints.add(fingerprint),"Designs must have distinct geometry");
+        }
         // Test 1: LRC Parsing
         MusicLyrics lyrics = MusicLyrics.parse("[00:03.00]First line\n[00:08.50][00:12.00]Second line\n[00:16.00]Third line\n[offset:250]", "");
         check(lyrics.synced && lyrics.lines.size() == 4, "LRC sync and multiple timestamps");

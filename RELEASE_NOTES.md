@@ -1,3 +1,10 @@
+# 0.1.30
+
+- Rebuilt backlit vinyl around stationary pigment and annular transmitted light: bright near the label, smoky at the rim, with soft local illumination instead of a rotating rainbow wheel.
+- Six selectable pressings in **Vinyl visning**: refreshed Splatter, Marble, Sunburst and Translucent; new Mosaic (cyan/amber chips) and Colour Sectors.
+- Music light mode uses the existing synchronized beat envelope for ring expansion and illumination, bass for sustained energy, and treble for local highlights. Flow and Album remain non-beat modes. Audio transport and speaker-delay handling are unchanged.
+- Pigment generation now runs on one low-priority worker, discards superseded work and keeps the previous texture until ready. Cached shaders, colour filters and textures avoid per-frame pixel generation. Existing Eco/High/Ultra/Native quality levels remain; no additional settings.
+
 # 0.1.25
 
 - **Pure Beat Reactivity & Synthetic Wave Elimination**: Removed synthetic sine oscillation (`flowWave`) that moved to an artificial mathematical clock detached from the music. The ferrofluid is now 100% physically driven by live incoming beat transients (`pulse`) and real frequency energy (`bass`/`mid`).

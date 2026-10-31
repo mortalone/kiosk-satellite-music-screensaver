@@ -517,7 +517,10 @@ final class MusicVisualView extends View {
         float discR = isPortrait ? Math.min(w * 0.41f, h * 0.25f) : Math.min(w * (split ? 0.20f : 0.34f), h * 0.36f);
         if (discR <= 10) return;
 
-        if(vinylStyle.startsWith("Backlit ")){backlit.setPattern(vinylStyle);backlit.draw(c,cx,cy,discR,cover,dominantColor,elapsed,bass);return;}
+        if(vinylStyle.startsWith("Backlit ")){backlit.setPattern(vinylStyle);backlit.draw(c,cx,cy,discR,cover,dominantColor,elapsed,
+                isPlaying?bass:0,isPlaying?audioEnvelope.pulse(SystemClock.elapsedRealtime()):0,
+                isPlaying?smoothedTreble:0);
+            if(backlit.isPreparing())postInvalidateDelayed(40);return;}
 
         boolean withGlow = !"Disc Only (Minimal)".equals(vinylStyle);
 

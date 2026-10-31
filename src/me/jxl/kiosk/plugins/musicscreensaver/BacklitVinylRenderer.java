@@ -3,77 +3,101 @@ package me.jxl.kiosk.plugins.musicscreensaver;
 
 import android.graphics.*;
 
-/** Procedural translucent pressing: stationary pigment, moving light underneath. */
+/** Stationary translucent pigment over cached, annular backlighting. */
 final class BacklitVinylRenderer {
     String mode="Music";
     private String pattern="Backlit Splatter";
-    void setPattern(String value){if(!pattern.equals(value)){pattern=value;pigment=null;}}
     private final Paint paint=new Paint(3);
     private final Path clip=new Path();
     private final RectF rect=new RectF();
-    private final Matrix matrix=new Matrix();
-    private final RadialLight halo = new RadialLight(new int[]{0x004D8CA8,0x4056A8CE,0},new float[]{0,.8f,1});
-    private Bitmap pigment;
-    private int textureSize = 640, grooveCount = 65;
+    private final RadialLight ring=new RadialLight(
+            new int[]{0xFF10121D,0xFF423B58,0xFFFFFFFF,0xFFF7F4FF,0xFF8C8B9C,0xFF303440,0xFF151924},
+            new float[]{0,.22f,.34f,.48f,.72f,.94f,1});
+    private final RadialLight halo=new RadialLight(
+            new int[]{0,0x306B8DA2,0},new float[]{0,.81f,1});
+    private final RadialLight spot=new RadialLight(
+            new int[]{0xA0FFFFFF,0x30E4F4FF,0},new float[]{0,.38f,1});
+    private final RadialLight sheen=new RadialLight(
+            new int[]{0,0x03FFFFFF,0x30FFFFFF,0},new float[]{0,.90f,.985f,1});
+    private final PorterDuffColorFilter[] colors=new PorterDuffColorFilter[180];
+    private PorterDuffColorFilter albumFilter;
+    private int albumColor;
+    // One worker at a time. Stale results are discarded when settings change.
+    private volatile Bitmap pigment;
+    private volatile boolean building;
+    private volatile int revision;
+    private int requestedRevision=-1;
+    private int textureSize=640,grooveCount=65;
+    BacklitVinylRenderer() {
+        float[] hsv={0,.65f,1};
+        for(int i=0;i<colors.length;i++) {
+            hsv[0]=i*2; colors[i]=new PorterDuffColorFilter(Color.HSVToColor(hsv),PorterDuff.Mode.MULTIPLY);
+        }
+    }
+    void setPattern(String value) {
+        if(value!=null&&!pattern.equals(value)){pattern=value;revision++;}
+    }
     void setQuality(String quality) {
-        int size = "Eco".equals(quality) ? 256 : "Ultra".equals(quality) ? 1024 : "Native".equals(quality) ? 1536 : 640;
-        grooveCount = "Eco".equals(quality) ? 24 : "Ultra".equals(quality) ? 96 : "Native".equals(quality) ? 128 : 65;
-        if (size != textureSize) { textureSize = size; pigment = null; }
+        int size="Eco".equals(quality)?256:"Ultra".equals(quality)?1024:"Native".equals(quality)?1536:640;
+        grooveCount="Eco".equals(quality)?24:"Ultra".equals(quality)?96:"Native".equals(quality)?128:65;
+        if(size!=textureSize){textureSize=size;revision++;}
     }
-    private SweepGradient light;
-    private final float[] hsv={0,.78f,1};
-    private int lastPalette;
-    private float oldX,oldY;
-    private static double hash(int x,int y){int h=x*374761393+y*668265263;h=(h^(h>>>13))*1274126177;return ((h^(h>>>16))&0x7fffffff)/2147483647.0;}
-    private static double noise(double x,double y){
-        int ix=(int)Math.floor(x),iy=(int)Math.floor(y);double fx=x-ix,fy=y-iy;
-        fx=fx*fx*(3-2*fx);fy=fy*fy*(3-2*fy);
-        double top=hash(ix,iy)*(1-fx)+hash(ix+1,iy)*fx;
-        double bottom=hash(ix,iy+1)*(1-fx)+hash(ix+1,iy+1)*fx;
-        return top*(1-fy)+bottom*fy;
+    boolean isPreparing(){return building||requestedRevision!=revision;}
+    private void prepareTexture() {
+        if(building||requestedRevision==revision)return;
+        final int generation=revision,n=textureSize;
+        final String design=pattern;
+        requestedRevision=generation;building=true;
+        Thread worker=new Thread(new Runnable(){public void run(){
+            try {
+                int[] pixels=new int[n*n];
+                for(int y=0;y<n;y++) {
+                    if(generation!=revision)return;
+                    for(int x=0;x<n;x++)pixels[y*n+x]=VinylMaterial.pixel(design,
+                            (x+.5-n*.5)/(n*.5),(y+.5-n*.5)/(n*.5));
+                }
+                Bitmap next=Bitmap.createBitmap(pixels,n,n,Bitmap.Config.ARGB_8888);
+                if(generation==revision)pigment=next;
+                // Previous bitmap is left to GC: the render thread may still reference it.
+            } finally {building=false;}
+        }},"vinyl-material");
+        worker.setPriority(Thread.MIN_PRIORITY);worker.start();
     }
-    private void texture(){
-        int n=textureSize;int[] pixels=new int[n*n];
-        for(int y=0;y<n;y++)for(int x=0;x<n;x++){
-            double px=(x-n*.5)/(n*.5),py=(y-n*.5)/(n*.5),r=Math.hypot(px,py),a=Math.atan2(py,px);
-            if(r>1)continue;
-            double warp=noise(px*5+10,py*5+10)*2;
-            double veins=noise(px*13+warp,py*13-warp);
-            double flecks=.65*noise(px*87+warp*4,py*87-warp*4)+.35*noise(px*169,py*169);
-            double density=(flecks-.47)*9+(veins-.5)*1.8;
-            if("Backlit Marble".equals(pattern))density=Math.sin(px*14+warp*6+noise(px*9,py*9)*4)*.7+(veins-.5);
-            else if("Backlit Sunburst".equals(pattern))density=Math.sin(a*39+warp*3+r*5)*.65+(flecks-.5)*2;
-            else if("Backlit Translucent".equals(pattern))density=-.8+(veins-.5)*.5;
-
-            int alpha=(int)Math.max(8,Math.min(245,120+density*190));
-            if(r>.95)alpha=Math.max(alpha,(int)(150+(r-.95)*1500));
-            pixels[y*n+x]=(alpha<<24)|0x101321;
+    void draw(Canvas c,float cx,float cy,float r,Bitmap cover,int palette,double time,float bass,float pulse,float treble){
+        prepareTexture();
+        boolean music="Music".equals(mode);
+        float kick=music?Math.min(1,Math.max(0,pulse)):0;
+        float energy=music?Math.min(1,Math.max(0,bass)):0;
+        // Coherent colour moods. The pressing and its centre label never rotate.
+        int colorIndex=(int)((time*(music?22:9)+195)%360+360)%360/2;
+        PorterDuffColorFilter filter=colors[colorIndex];
+        if("Album".equals(mode)) {
+            if(albumFilter==null||albumColor!=palette){
+                albumColor=palette;float[] hsv=new float[3];Color.colorToHSV(palette,hsv);
+                hsv[1]=Math.min(.65f,hsv[1]);hsv[2]=1;
+                albumFilter=new PorterDuffColorFilter(Color.HSVToColor(hsv),PorterDuff.Mode.MULTIPLY);
+            }
+            filter=albumFilter;
         }
-        pigment=Bitmap.createBitmap(pixels,n,n,Bitmap.Config.ARGB_8888);
-    }
-    void draw(Canvas c,float cx,float cy,float r,Bitmap cover,int palette,double time,float bass){
-        if(pigment==null)texture();
-        if(light==null||lastPalette!=palette||oldX!=cx||oldY!=cy){
-            Color.colorToHSV(palette,hsv);float hue=hsv[0];
-            int[] colors=new int[7];
-            for(int i=0;i<6;i++){hsv[0]=(hue+i*60)%360;hsv[1]=.72f;hsv[2]=1;colors[i]=Color.HSVToColor(hsv);}colors[6]=colors[0];
-            light=new SweepGradient(cx,cy,colors,null);lastPalette=palette;oldX=cx;oldY=cy;
-        }
-        float intensity="Music".equals(mode)?.55f+Math.min(.45f,bass*.5f):.85f;
-        c.save();
-        paint.setStyle(Paint.Style.FILL);paint.setColor(Color.WHITE);paint.setAlpha(255);
-        paint.setShader(halo.at(cx,cy,r*1.18f));
-        c.drawCircle(cx,cy,r*1.18f,paint);
-        matrix.setRotate((float)(time*("Album".equals(mode)?4:"Flow".equals(mode)?18:30)),cx,cy);light.setLocalMatrix(matrix);
-        paint.setShader(light);paint.setAlpha((int)(255*intensity));c.drawCircle(cx,cy,r,paint);
+        c.save();paint.setStyle(Paint.Style.FILL);paint.setColor(Color.WHITE);paint.setColorFilter(filter);
+        paint.setAlpha((int)(150+105*kick));paint.setShader(halo.at(cx,cy,r*(1.12f+.07f*kick)));
+        c.drawCircle(cx,cy,r*(1.12f+.07f*kick),paint);
+        clip.reset();clip.addCircle(cx,cy,r,Path.Direction.CW);c.clipPath(clip);
+        paint.setAlpha(255);paint.setShader(null);paint.setColor(0xFF10121C);c.drawCircle(cx,cy,r,paint);
+        paint.setColor(Color.WHITE);paint.setAlpha((int)(music?175+45*energy+35*kick:235));
+        paint.setShader(ring.at(cx,cy,r*(1+.055f*kick)));c.drawCircle(cx,cy,r,paint);
+        // Broad local light underneath the pigment, not sparkling particles above it.
+        float sx=cx+r*.27f*(float)Math.cos(time*.13),sy=cy+r*.22f*(float)Math.sin(time*.17);
+        paint.setColorFilter(null);paint.setAlpha((int)(music?40+105*kick+45*Math.min(1,Math.max(0,treble)):80));
+        paint.setShader(spot.at(sx,sy,r*.62f));c.drawCircle(sx,sy,r*.62f,paint);
         paint.setShader(null);paint.setAlpha(255);
-        if("Album".equals(mode)){paint.setColor((palette&0xffffff)|0x88000000);c.drawCircle(cx,cy,r,paint);paint.setColor(Color.WHITE);}
-        rect.set(cx-r,cy-r,cx+r,cy+r);c.drawBitmap(pigment,null,rect,paint);
-        paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(.65f);paint.setColor(0x22FFFFFF);
+        Bitmap material=pigment;
+        if(material!=null){rect.set(cx-r,cy-r,cx+r,cy+r);c.drawBitmap(material,null,rect,paint);}
+        paint.setShader(sheen.at(cx,cy,r));c.drawCircle(cx,cy,r,paint);paint.setShader(null);
+        paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(.6f);paint.setColor(0x0CFFFFFF);
         for(int i=0;i<grooveCount;i++)c.drawCircle(cx,cy,r*(.27f+i*.704f/Math.max(1,grooveCount-1)),paint);
         paint.setStyle(Paint.Style.FILL);paint.setColor(0xFF161820);float label=r*.24f;c.drawCircle(cx,cy,label,paint);
         if(cover!=null){c.save();clip.reset();clip.addCircle(cx,cy,label,Path.Direction.CW);c.clipPath(clip);rect.set(cx-label,cy-label,cx+label,cy+label);paint.setColor(Color.WHITE);c.drawBitmap(cover,null,rect,paint);c.restore();}
-        paint.setColor(0xFF101318);c.drawCircle(cx,cy,r*.018f,paint);
-        c.restore();
+        paint.setColor(0xFF101318);c.drawCircle(cx,cy,r*.018f,paint);c.restore();
     }
 }
