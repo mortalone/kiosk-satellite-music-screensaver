@@ -74,11 +74,13 @@ final class MusicVisualView extends View {
     private float smoothedTreble = 0;
     private long lastPhysicsTime = 0;
 
+    private final ArtRenderer art = new ArtRenderer();
     private final BacklitVinylRenderer backlit = new BacklitVinylRenderer();
     private int vinylGrooves = 14;
     void setFluidQuality(String value){
         fluid.setQuality(value);
         backlit.setQuality(value);
+        art.setQuality(value);
         vinylGrooves = "Eco".equals(value) ? 8 : "Ultra".equals(value) ? 28 : "Native".equals(value) ? 40 : 14;
         invalidate();
     }
@@ -376,7 +378,10 @@ final class MusicVisualView extends View {
         drawBackground(canvas, w, h);
 
         // 2. Draw Visual Centerpiece
-        if ("vinyl".equals(effect) || "hybrid_vinyl".equals(effect)) {
+        if (ArtMotion.supports(effect)) {
+            art.draw(canvas,effect,w,h,dt,smoothedBass,smoothedMid,smoothedTreble,
+                    audioEnvelope.pulse(now),playing);
+        } else if ("vinyl".equals(effect) || "hybrid_vinyl".equals(effect)) {
             drawVinyl(canvas, w, h, isPortrait, isSplit, playing, coverArt, elapsed, smoothedBass);
         } else if ("ferrofluid".equals(effect) || "hybrid_ferrofluid".equals(effect)) {
             drawFerrofluid(canvas, w, h, isPortrait, isSplit, smoothedBass, time);
@@ -395,7 +400,7 @@ final class MusicVisualView extends View {
             drawDebugHud(canvas, w, h);
         }
 
-        if (playing || showDebugHud || "ferrofluid".equals(effect) || "hybrid_ferrofluid".equals(effect) || "cotodama".equals(effect)) {
+        if (ArtMotion.supports(effect) || playing || showDebugHud || "ferrofluid".equals(effect) || "hybrid_ferrofluid".equals(effect) || "cotodama".equals(effect)) {
             postInvalidateDelayed(economy ? 66 : 40);
         }
     }

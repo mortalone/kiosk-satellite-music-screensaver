@@ -3,10 +3,10 @@
   "apiVersion": 1,
   "id": "music-screensaver",
   "name": "Music Screensaver",
-  "version": "0.1.30",
+  "version": "0.1.31",
   "minAndroidSdk": 26,
   "entryClass": "me.jxl.kiosk.plugins.musicscreensaver.MusicScreensaverPlugin",
-  "description": "High-aesthetic music screensaver for Kiosk Satellite featuring rotating vinyl turntable, sound-reactive ferrofluid, Cotodama kinetic lyrics, and hybrid split-stage layouts with smart touch-dismiss.",
+  "description": "Music screensaver with vinyl, ferrofluid, kinetic lyrics and procedural wall art: bloom, silk, chrome, aurora, coral, kinetic sand table and prism party.",
   "author": "mortalone",
   "license": "MIT",
   "capabilities": [
@@ -63,10 +63,17 @@
         "hybrid_ferrofluid",
         "vinyl",
         "ferrofluid",
-        "cotodama"
+        "cotodama",
+        "bloom",
+        "silk",
+        "chrome",
+        "aurora",
+        "coral",
+        "sand_table",
+        "prism_party"
       ],
       "group": "Appearance",
-      "description": "Hybrid Vinyl (Plade + Tekst), Hybrid Ferrofluid (Væske + Tekst), Vinyl Spiller, Ferrofluid Magnetvæske eller Cotodama Kinetiske Lyrics."
+      "description": "Vinyl, ferrofluid, lyrics og levende vægkunst: bloom (blomst), silk, chrome, aurora, coral, sand_table og prism_party."
     },
     {
       "key": "vinylStyle",
@@ -151,7 +158,7 @@
       "max": 10,
       "step": 1,
       "group": "Performance",
-      "description": "Hvor kraftigt ferrofluid og lyrics reagerer på musikkens bas og lydspektrum."
+      "description": "Styrken af musikreaktionen i visualiseringer og lyrics. Rolige kunstvisninger begrænser kraftige udsving."
     },
     {
       "key": "refreshRate",
@@ -209,7 +216,7 @@
     {
       "key": "fluidQuality",
       "type": "select",
-      "title": "Detaljegrad · ferrofluid og vinyl",
+      "title": "Detaljegrad · visualiseringer",
       "default": "High",
       "options": [
         "Eco",
@@ -218,7 +225,7 @@
         "Native"
       ],
       "group": "Performance",
-      "description": "Eco / High / Ultra / Native. Styrer væskeopløsning, vinylriller og backlit-tekstur (256/640/1024/1536 px). Tekst og covers forbliver skarpe. FPS og gain vælges separat. Højere kvalitet kræver mere CPU/GPU og hukommelse."
+      "description": "Eco / High / Ultra / Native: væske, vinyltekstur og detaljegrad i vægkunst. Højere niveau giver flere kurver/folder og finere sand. FPS og gain vælges separat."
     },
     {
       "key": "lyricsStyle",

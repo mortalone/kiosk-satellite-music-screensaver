@@ -113,3 +113,24 @@ Choose **Vinyl visning** while using Vinyl or Hybrid Vinyl:
 **Gennemlyst vinyl: lys → Music** adds pulses from the same synchronized beat envelope used by ferrofluid. Bass controls sustained light and treble adds local illumination. A live audio source is required for those reactions; colour flow itself is decorative. **Flow** slowly changes colour; **Album** holds the album hue. The material stays stationary in all three modes. No further HA helpers or settings are needed.
 
 Detail quality still applies to all six materials. Generation happens off the UI thread; when changing style or quality, the previous material remains briefly until the replacement is ready. These are procedural interpretations of illuminated vinyl, not photographs of a product.
+
+
+### Living wall art · 0.1.31
+
+Update the plugin and choose **Visualisering** in Kiosk or the existing Home Assistant select:
+
+| Value | Scene |
+| --- | --- |
+| `bloom` | A layered flower with folded petals and a gently opening silhouette |
+| `silk` | Floating ribbons with soft highlights |
+| `chrome` | An organic metallic form with moving reflected light |
+| `aurora` | Soft curtains of light and sparse stars |
+| `coral` | Branching luminous coral with slow sway |
+| `sand_table` | A kinetic sand table: a ball draws persistent grooves along a continuous rosette |
+| `prism_party` | Coloured beams and layered prisms with stronger beat-driven geometry |
+
+These scenes are generated live. They retain gentle decorative motion without music; audio adds a bounded response through the same synchronized envelope as the existing effects. Sand only changes speed slightly, retaining the calm physical-table character. Its initial rosette is drawn procedurally; the moving ball continues drawing, and the surface gradually clears after 20 minutes. Switching away freezes sand progression; restarting the overlay starts a fresh table.
+
+**Detaljegrad · visualiseringer** controls mesh density, coral branching and sand resolution (320/512/768/1024). Start at **High** on the Pi and use **Eco** if needed. Screen diagonal is not pixel resolution. Existing playback/volume controls can be hidden for a cleaner picture-frame appearance. No new HA helpers are required. Older Android versions use a simpler triangle-rendering fallback.
+
+`python tools/preview_art.py /tmp/art-preview.png` generates a composition check from the production renderer using a Java2D adapter. This is not an Android or GPU benchmark and approximates per-vertex shading. Test actual smoothness and colour on the target display before judging performance.

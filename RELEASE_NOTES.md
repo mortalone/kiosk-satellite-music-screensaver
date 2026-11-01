@@ -1,3 +1,12 @@
+# 0.1.31
+
+- Seven live procedural scenes: Bloom (folded flower), Silk, Chrome, Aurora, Coral, Sand Table and Prism Party. Available in both plugin Visualisering and the existing HA select; still 20 settings and 11 commands.
+- Wall-art scenes use a calm independent motion clock and bounded audio response. Music changes folds, reflections, light or motion; paused audio decays smoothly. No video loops or external assets.
+- Kinetic sand table: a seeded rosette and a metallic ball continuously drawing retained grooves, with restrained music-dependent speed and a gradual rake after 20 minutes of viewing.
+- Prism Party uses rotating coloured beams and geometric prisms with beat-driven expansion; no full-screen strobing.
+- Existing detail setting now covers all scenes; cached geometry buffers and bounded sand texture sizes. Legacy Android hardware Canvas uses a triangle fallback. Existing synchronized audio timing is reused unchanged.
+- Added motion/sand continuity tests and a Java2D composition preview tool. Device frame rate and the actual Android appearance still need on-screen evaluation.
+
 # 0.1.30
 
 - Rebuilt backlit vinyl around stationary pigment and annular transmitted light: bright near the label, smoky at the rim, with soft local illumination instead of a rotating rainbow wheel.

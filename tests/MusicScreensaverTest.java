@@ -3,6 +3,24 @@ package me.jxl.kiosk.plugins.musicscreensaver;
 
 public final class MusicScreensaverTest {
     public static void main(String[] args) {
+        ArtMotion calm=new ArtMotion(), fast=new ArtMotion();
+        for(int i=0;i<250;i++)calm.step(.04f,.4f,.5f,.3f,.6f,true);
+        for(int i=0;i<500;i++)fast.step(.02f,.4f,.5f,.3f,.6f,true);
+        check(Math.abs(calm.bass-fast.bass)<.001,"Art smoothing independent of frame rate");
+        check(calm.beat>.5,"Beat signal reaches art motion");
+        for(int i=0;i<500;i++)calm.step(.04f,1,1,1,1,false);
+        check(calm.bass<.001 && calm.beat<.001,"Paused music relaxes artwork");
+        calm.step(Float.NaN,Float.NaN,Float.POSITIVE_INFINITY,-2,Float.NaN,true);
+        check(Float.isFinite(calm.bass)&&Double.isFinite(calm.time),"Bad audio cannot corrupt art geometry");
+        double prevX=calm.sandX(),prevY=calm.sandY();
+        for(int i=0;i<100000;i++){
+            calm.stepSand(.04f);
+            double x=calm.sandX(),y=calm.sandY();
+            check(Math.hypot(x,y)<=.761,"Sand ball stays inside tray");
+            check(Math.hypot(x-prevX,y-prevY)<.004,"Sand ball moves continuously without teleports");
+            prevX=x;prevY=y;
+        }
+
         String[] designs={"Backlit Splatter","Backlit Mosaic","Backlit Sunburst",
                 "Backlit Marble","Backlit Colour Sectors","Backlit Translucent"};
         java.util.Set<Long> fingerprints=new java.util.HashSet<Long>();

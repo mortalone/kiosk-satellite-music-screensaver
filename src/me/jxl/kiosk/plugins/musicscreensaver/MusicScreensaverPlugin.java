@@ -380,7 +380,7 @@ public final class MusicScreensaverPlugin implements KioskPlugin {
         if (host == null) return;
         try {
             host.publishSelect("effect", "Visualisering",
-                    new String[]{"hybrid_vinyl", "hybrid_ferrofluid", "vinyl", "ferrofluid", "cotodama"}, effect);
+                    new String[]{"hybrid_vinyl", "hybrid_ferrofluid", "vinyl", "ferrofluid", "cotodama", "bloom", "silk", "chrome", "aurora", "coral", "sand_table", "prism_party"}, effect);
             host.publishSwitch("active", "Aktiv", isOverlayActive);
             host.publishSwitch("debug_hud", "Vis synk-debugger på skærm", debugHudEnabled);
             host.publishSelect("lyrics_reaction","Tekstens musikreaktion",new String[]{"Fra","Diskret","Livlig"},lyricsReaction);
