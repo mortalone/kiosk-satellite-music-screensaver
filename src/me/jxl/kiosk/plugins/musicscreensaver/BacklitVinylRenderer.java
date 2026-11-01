@@ -3,7 +3,7 @@ package me.jxl.kiosk.plugins.musicscreensaver;
 
 import android.graphics.*;
 
-/** Stationary translucent pigment over cached, annular backlighting. */
+/** Cached optical material with animated surface geometry and transmitted light. */
 final class BacklitVinylRenderer {
     String mode="Music";
     private String pattern="Backlit Splatter";
@@ -28,6 +28,10 @@ final class BacklitVinylRenderer {
     private volatile int revision;
     private int requestedRevision=-1;
     private int textureSize=640,grooveCount=65;
+    private int meshSize=36;
+    private float[] meshVertices=new float[37*37*2];
+    private int[] meshColors=new int[37*37];
+    private final float[] lightHsv=new float[3];
     BacklitVinylRenderer() {
         float[] hsv={0,.65f,1};
         for(int i=0;i<colors.length;i++) {
@@ -41,6 +45,8 @@ final class BacklitVinylRenderer {
         int size="Eco".equals(quality)?256:"Ultra".equals(quality)?1024:"Native".equals(quality)?1536:640;
         grooveCount="Eco".equals(quality)?24:"Ultra".equals(quality)?96:"Native".equals(quality)?128:65;
         if(size!=textureSize){textureSize=size;revision++;}
+        int grid="Eco".equals(quality)?20:"Ultra".equals(quality)?48:"Native".equals(quality)?64:36;
+        if(meshSize!=grid){meshSize=grid;meshVertices=new float[(grid+1)*(grid+1)*2];meshColors=new int[(grid+1)*(grid+1)];}
     }
     boolean isPreparing(){return building||requestedRevision!=revision;}
     private void prepareTexture() {
@@ -53,7 +59,7 @@ final class BacklitVinylRenderer {
                 int[] pixels=new int[n*n];
                 for(int y=0;y<n;y++) {
                     if(generation!=revision)return;
-                    for(int x=0;x<n;x++)pixels[y*n+x]=VinylMaterial.pixel(design,
+                    for(int x=0;x<n;x++)pixels[y*n+x]=VinylMaterial.glassPixel(design,
                             (x+.5-n*.5)/(n*.5),(y+.5-n*.5)/(n*.5));
                 }
                 Bitmap next=Bitmap.createBitmap(pixels,n,n,Bitmap.Config.ARGB_8888);
@@ -92,7 +98,30 @@ final class BacklitVinylRenderer {
         paint.setShader(spot.at(sx,sy,r*.62f));c.drawCircle(sx,sy,r*.62f,paint);
         paint.setShader(null);paint.setAlpha(255);
         Bitmap material=pigment;
-        if(material!=null){rect.set(cx-r,cy-r,cx+r,cy+r);c.drawBitmap(material,null,rect,paint);}
+        if(material!=null){
+            float albumHue=0;Color.colorToHSV(palette,lightHsv);albumHue=lightHsv[0];
+            for(int j=0;j<=meshSize;j++)for(int i=0;i<=meshSize;i++){
+                double x=i*2.0/meshSize-1,y=j*2.0/meshSize-1;
+                double rad=Math.hypot(x,y),angle=Math.atan2(y,x);
+                double envelope=Math.max(0,1-rad)*Math.min(1,rad*4);
+                double twist=envelope*(.06*Math.sin(time*.35+rad*7)+.035*Math.sin(time*.21+y*6)+kick*.025);
+                double a=angle+twist;
+                double ripple=envelope*.016*Math.sin(rad*18-time*.8+angle*2)*(1+energy);
+                int n=j*(meshSize+1)+i;
+                meshVertices[n*2]=cx+r*(float)((rad+ripple)*Math.cos(a));
+                meshVertices[n*2+1]=cy+r*(float)((rad+ripple)*Math.sin(a));
+                double sweep=.5+.5*Math.sin(x*3.5+y*2-time*.55);
+                double caustic=Math.pow(.5+.5*Math.sin(rad*19+angle*3-time*1.1),5);
+                double local=Math.exp(-((x-.45*Math.cos(time*.29))*(x-.45*Math.cos(time*.29))
+                        +(y-.40*Math.sin(time*.23))*(y-.40*Math.sin(time*.23)))*4);
+                lightHsv[0]=(float)(("Album".equals(mode)?albumHue:time*(music?17:8)+190)+sweep*58)%360;
+                lightHsv[1]=(float)(.60-.40*local-.16*caustic);
+                lightHsv[2]=(float)Math.min(1,.66+.20*sweep+.12*caustic+.12*local+.14*kick);
+                meshColors[n]=Color.HSVToColor(lightHsv);
+            }
+            // Pigment, chip bevels and coloured sectors all receive the moving illumination.
+            c.drawBitmapMesh(material,meshSize,meshSize,meshVertices,0,meshColors,0,paint);
+        }
         paint.setShader(sheen.at(cx,cy,r));c.drawCircle(cx,cy,r,paint);paint.setShader(null);
         paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(.6f);paint.setColor(0x0CFFFFFF);
         for(int i=0;i<grooveCount;i++)c.drawCircle(cx,cy,r*(.27f+i*.704f/Math.max(1,grooveCount-1)),paint);

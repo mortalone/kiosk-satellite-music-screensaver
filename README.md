@@ -110,7 +110,7 @@ Choose **Vinyl visning** while using Vinyl or Hybrid Vinyl:
 | Backlit Colour Sectors | Broad contrasting sectors with splatter |
 | Backlit Translucent | Quiet translucent pressing with a luminous rim |
 
-**Gennemlyst vinyl: lys → Music** adds pulses from the same synchronized beat envelope used by ferrofluid. Bass controls sustained light and treble adds local illumination. A live audio source is required for those reactions; colour flow itself is decorative. **Flow** slowly changes colour; **Album** holds the album hue. The material stays stationary in all three modes. No further HA helpers or settings are needed.
+**Gennemlyst vinyl: lys → Music** adds pulses from the same synchronized beat envelope used by ferrofluid. Bass controls sustained light and treble adds local illumination. A live audio source is required for those reactions; colour flow itself is decorative. **Flow** slowly changes colour; **Album** holds the album hue. As of 0.1.32, the material has gentle local deformation and travelling illumination in all three modes; the centre label stays stationary. No further HA helpers or settings are needed.
 
 Detail quality still applies to all six materials. Generation happens off the UI thread; when changing style or quality, the previous material remains briefly until the replacement is ready. These are procedural interpretations of illuminated vinyl, not photographs of a product.
 
@@ -126,11 +126,17 @@ Update the plugin and choose **Visualisering** in Kiosk or the existing Home Ass
 | `chrome` | An organic metallic form with moving reflected light |
 | `aurora` | Soft curtains of light and sparse stars |
 | `coral` | Branching luminous coral with slow sway |
-| `sand_table` | A kinetic sand table: a ball draws persistent grooves along a continuous rosette |
+| `sand_table` | A kinetic sand table: four balls draw persistent grooves along interwoven rosettes |
 | `prism_party` | Coloured beams and layered prisms with stronger beat-driven geometry |
 
-These scenes are generated live. They retain gentle decorative motion without music; audio adds a bounded response through the same synchronized envelope as the existing effects. Sand only changes speed slightly, retaining the calm physical-table character. Its initial rosette is drawn procedurally; the moving ball continues drawing, and the surface gradually clears after 20 minutes. Switching away freezes sand progression; restarting the overlay starts a fresh table.
+These scenes are generated live. They retain gentle decorative motion without music; audio adds a bounded response through the same synchronized envelope as the existing effects. Sand only changes speed slightly, retaining the calm physical-table character. Its initial rosette is drawn procedurally; the four moving balls continue drawing, and the surface gradually clears after 20 minutes. Switching away freezes sand progression; restarting the overlay starts a fresh table.
 
-**Detaljegrad · visualiseringer** controls mesh density, coral branching and sand resolution (320/512/768/1024). Start at **High** on the Pi and use **Eco** if needed. Screen diagonal is not pixel resolution. Existing playback/volume controls can be hidden for a cleaner picture-frame appearance. No new HA helpers are required. Older Android versions use a simpler triangle-rendering fallback.
+**Detaljegrad · visualiseringer** controls mesh density, coral branching and sand resolution (384/768/1024/1280). Start at **High** on the Pi and use **Eco** if needed. Screen diagonal is not pixel resolution. Existing playback/volume controls can be hidden for a cleaner picture-frame appearance. No new HA helpers are required. Older Android versions use a simpler triangle-rendering fallback.
 
 `python tools/preview_art.py /tmp/art-preview.png` generates a composition check from the production renderer using a Java2D adapter. This is not an Android or GPU benchmark and approximates per-vertex shading. Test actual smoothness and colour on the target display before judging performance.
+
+### Material and motion revision · 0.1.32
+
+Splatter, Mosaic and Colour Sectors now share cellular optical detail, while retaining distinct pigment distributions. Light is applied to the textured surface, with moving local highlights and subtle mesh deformation. Sunburst, Marble and Translucent use the same animated lighting. Bloom now uses broad three-dimensional ruffled petals, fine veins and directional surface lighting. Sand has four pens and interwoven finer grooves. Decorative motion and synchronized music response remain separate: a moving scene alone does not demonstrate audio synchronization.
+
+For a software composition check: `python tools/preview_art.py /tmp/vinyl.png vinyl 8` renders vinyl at eight seconds; `python tools/preview_art.py /tmp/art.png landscape 8` checks art geometry at that time. These snapshots do not measure playback frame rate or test Android rendering. Start with High; the denser flower surface is more expensive than the previous simplified petals. Evaluate Eco if necessary on the target device.

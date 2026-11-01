@@ -22,7 +22,7 @@ final class ArtRenderer {
     private Canvas sandCanvas;
     private int sandSize;
     private double sandAge,lastSandTime=-1;
-    private float penX,penY;
+    private final float[] penX=new float[4],penY=new float[4];
     private String lastEffect="";
     void setQuality(String quality){
         int next="Eco".equals(quality)?0:"Ultra".equals(quality)?2:"Native".equals(quality)?3:1;
@@ -74,44 +74,60 @@ final class ArtRenderer {
         }
         c.drawVertices(Canvas.VertexMode.TRIANGLES,(gridU+1)*(gridV+1)*2,vertices,0,null,0,colors,0,indices,0,indexCount,paint);
     }
+    private final float[] petalPoint=new float[3],petalU=new float[3],petalV=new float[3];
     private void bloom(Canvas c){
-        int u=12+detail*6,v=8+detail*3;grid(u,v);
+        int u=detail==0?16:detail==1?24:detail==2?32:40;
+        int v=detail==0?28:detail==1?48:detail==2?64:80;grid(u,v);
         double time=motion.time;
-        // Outer petals first, then nested whorls; camera remains still.
         for(int layer=0;layer<3;layer++){
-            int petals=layer==0?9:layer==1?7:6;
-            double length=(.96-layer*.235)*(1+.035*motion.bass+.035*motion.beat);
+            int petals=layer==0?8:layer==1?7:6;
             for(int p=0;p<petals;p++){
-                double angle=p*Math.PI*2/petals+layer*.49+.035*Math.sin(time*.09+layer);
-                double ca=Math.cos(angle),sa=Math.sin(angle);
                 for(int j=0;j<=v;j++)for(int i=0;i<=u;i++){
-                    double t=i/(double)u,s=j/(double)v*2-1;
-                    double width=Math.pow(Math.sin(Math.PI*t),.72)*(.34-layer*.035);
-                    double fold=Math.sin(s*13+t*6+time*.21+p)*(.015+.035*t);
-                    double curl=.18*t*t*Math.sin(time*.14+p*1.7)+.08*s*s*t;
-                    double radial=.055+length*t+fold;
-                    double lateral=s*width*(.8+.2*t);
-                    double z=.10*Math.sin(t*Math.PI)+curl+fold*(1+.35*motion.mid);
+                    double t=i/(double)u,side=j/(double)v*2-1;
+                    BloomSurface.point(t,side,layer,p,petals,time,motion.bass,motion.beat,petalPoint);
+                    BloomSurface.point(t+.002,side,layer,p,petals,time,motion.bass,motion.beat,petalU);
+                    BloomSurface.point(t,side+.002,layer,p,petals,time,motion.bass,motion.beat,petalV);
+                    double ux=petalU[0]-petalPoint[0],uy=petalU[1]-petalPoint[1],uz=petalU[2]-petalPoint[2];
+                    double vx=petalV[0]-petalPoint[0],vy=petalV[1]-petalPoint[1],vz=petalV[2]-petalPoint[2];
+                    double nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+                    double len=Math.max(1e-10,Math.sqrt(nx*nx+ny*ny+nz*nz));nx/=len;ny/=len;nz/=len;
+                    if(nz<0){nx=-nx;ny=-ny;nz=-nz;}
+                    double diffuse=Math.max(0,nx*-.35+ny*-.40+nz*.84);
+                    double specular=Math.pow(Math.max(0,nx*-.20+ny*-.22+nz*.954),18);
+                    double subsurface=.10*Math.pow(Math.abs(side),3)+.10*t;
+                    double light=.39+.47*diffuse+.14*specular+subsurface;
+                    double hue=300+95*Math.sin(p*1.17+layer*.8)+25*t+9*Math.sin(time*.055);
                     int k=j*(u+1)+i;
-                    vertices[k*2]=(float)(ca*radial-sa*lateral);
-                    vertices[k*2+1]=(float)((sa*radial+ca*lateral)*.88-z);
-                    double highlight=.72+.19*Math.cos(s*13+t*6+time*.21+p)+.09*Math.sin(angle);
-                    double hue=318+58*Math.sin(angle*.7+layer*.6)+30*t+8*Math.sin(time*.035);
-                    colors[k]=color(hue,.38+.23*t,highlight,255);
+                    vertices[k*2]=petalPoint[0];vertices[k*2+1]=petalPoint[1]*.86f-petalPoint[2]*.54f;
+                    colors[k]=color(hue,.58-.22*specular-.12*t,light,255);
                 }
                 mesh(c);
+                // Fine continuous radial veins catch light without a polygon wireframe.
+                paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(.0009f);
+                int veins=detail==0?10:detail==1?18:26;
+                for(int n=0;n<veins;n++){
+                    double side=(n+.5)/veins*1.8-.9;path.reset();
+                    for(int i=0;i<=24;i++){
+                        double t=.10+i*.88/24;
+                        BloomSurface.point(t,side,layer,p,petals,time,motion.bass,motion.beat,petalPoint);
+                        float x=petalPoint[0],y=petalPoint[1]*.86f-petalPoint[2]*.54f;
+                        if(i==0)path.moveTo(x,y);else path.lineTo(x,y);
+                    }
+                    paint.setColor(0x28FFF0E4);c.drawPath(path,paint);
+                }
+                paint.setStyle(Paint.Style.FILL);
             }
         }
-        // Seed-like luminous core, not a flat centre disc.
-        int seeds=detail==0?55:110;
+        int seeds=detail==0?100:240;
         for(int n=0;n<seeds;n++){
-            double a=n*2.399963,r=.105*Math.sqrt(n/(double)seeds);
-            paint.setColor(color(275+n*.4,.32,.55+.35*(1-r/.105),235));
-            c.drawCircle((float)(Math.cos(a)*r),(float)(Math.sin(a)*r-.015),.009f,paint);
+            double angle=n*2.399963+motion.time*.04,r=.12*Math.sqrt(n/(double)seeds);
+            float x=(float)(Math.cos(angle)*r),y=(float)(Math.sin(angle)*r*.7-.065);
+            paint.setColor(color(265+n*.21,.58,.35+.40*(1-r/.12),255));c.drawCircle(x,y,.0065f,paint);
+            paint.setColor(0xB9F7D1F3);c.drawCircle(x-.0017f,y-.002f,.0018f,paint);
         }
     }
     private void silk(Canvas c,boolean northern){
-        int u=30+detail*14,v=northern?8:10+detail*2;grid(u,v);
+        int u=40+detail*14,v=northern?18:16+detail*4;grid(u,v);
         double time=motion.time;
         int ribbons=northern?4:3;
         for(int band=0;band<ribbons;band++){
@@ -120,17 +136,27 @@ final class ArtRenderer {
                 double x=t*2-1;
                 double wave=Math.sin(t*6.1+time*.15+band*.95);
                 double centre=(band-1)*.20+wave*(.18+.05*motion.mid);
-                double width=northern?.48:.14+.12*Math.sin(t*5+time*.13+band);
-                double fold=Math.sin(t*24+time*.16+band)*.022;
+                double width=northern?.66+.06*motion.bass:.23+.14*Math.sin(t*5+time*.21+band);
+                double fold=(Math.sin(t*24+time*.29+band)+.3*Math.sin(t*61-time*.16))*.032;
                 int k=j*(u+1)+i;
                 vertices[k*2]=(float)x;
                 vertices[k*2+1]=(float)(centre+(s-.5)*width+fold*s);
                 double edge=Math.pow(Math.sin(Math.PI*s),northern?1.6:.4);
                 double light=.58+.35*Math.cos(s*5+t*11+time*.2+band);
                 colors[k]=color(northern?155+band*28+t*38:205+band*52+t*32,
-                        northern?.52:.35,light+.05*motion.high,(int)((northern?125:230)*edge*Math.pow(Math.sin(Math.PI*t),.35)));
+                        northern?.52:.35,light+.05*motion.high,(int)((northern?165:245)*edge*Math.pow(Math.sin(Math.PI*t),.35)));
             }
             mesh(c);
+            paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(.001f);
+            for(int thread=1;thread<12;thread++){
+                path.reset();double side=thread/12.;
+                for(int i=0;i<=u;i++){
+                    int j=(int)(side*v),k=j*(u+1)+i;
+                    if(i==0)path.moveTo(vertices[k*2],vertices[k*2+1]);else path.lineTo(vertices[k*2],vertices[k*2+1]);
+                }
+                paint.setColor(northern?0x1C9CF6DB:0x24E7DEFF);c.drawPath(path,paint);
+            }
+            paint.setStyle(Paint.Style.FILL);
         }
         if(northern){
             for(int i=0;i<38;i++){
@@ -169,7 +195,7 @@ final class ArtRenderer {
         double sway=.07*Math.sin(motion.time*.14+seed)+.035*motion.mid*Math.sin(seed*3);
         float endX=x+(float)Math.cos(a+sway)*length,endY=y+(float)Math.sin(a+sway)*length;
         path.reset();path.moveTo(x,y);
-        path.cubicTo(x+(endX-x)*.20f-.025f,y+(endY-y)*.35f,endX+.02f,endY+length*.25f,endX,endY);
+        path.cubicTo(x+(endX-x)*.20f-.025f,y+(endY-y)*.35f,endX+(float)(.045*Math.sin(seed+motion.time*.23)),endY+length*.25f,endX,endY);
         paint.setStrokeWidth(.0035f+depth*.0022f);
         double travel=.5+.5*Math.sin(seed*2-depth*.8-motion.time*.4);
         paint.setColor(color(167+seed*7,.42,.40+.32*travel+.10*motion.beat,225));c.drawPath(path,paint);
@@ -183,49 +209,54 @@ final class ArtRenderer {
     private void sand(Canvas c,float dt){
         motion.stepSand(dt);
         if(sand==null){
-            sandSize=detail==0?320:detail==1?512:detail==2?768:1024;
+            sandSize=detail==0?384:detail==1?768:detail==2?1024:1280;
             int[] pixels=new int[sandSize*sandSize];
             for(int y=0;y<sandSize;y++)for(int x=0;x<sandSize;x++){
-                int grain=(int)(VinylMaterial.hash(x,y)*14);
-                pixels[y*sandSize+x]=Color.rgb(172+grain,155+grain,124+grain);
+                double xx=x*2.0/sandSize-1,yy=y*2.0/sandSize-1;
+                double shade=1-.10*(xx*xx+yy*yy)-.025*yy;
+                int grain=(int)(VinylMaterial.hash(x,y)*16);
+                pixels[y*sandSize+x]=Color.rgb((int)((185+grain)*shade),(int)((164+grain)*shade),(int)((126+grain)*shade));
             }
             sand=Bitmap.createBitmap(sandSize,sandSize,Bitmap.Config.ARGB_8888);
             sand.setPixels(pixels,0,sandSize,0,0,sandSize,sandSize);sandCanvas=new Canvas(sand);
-            // An initial, mathematically drawn rosette makes the table composed from first use.
-            // The ball then continues this same continuous path, not a prerecorded animation.
-            float previousX=0,previousY=0;
-            for(int i=0;i<=2400;i++){
-                double phase=motion.sandPhase*i/2400.0;
-                float px=(float)(.76*Math.sin(2.013*phase)*Math.cos(phase));
-                float py=(float)(.76*Math.sin(2.013*phase)*Math.sin(phase));
-                if(i>0)groove(previousX,previousY,px,py);
-                previousX=px;previousY=py;
+            for(int ball=0;ball<4;ball++){
+                path.reset();float scale=sandSize*.5f;
+                for(int i=0;i<=3000;i++){
+                    double phase=motion.sandPhase*i/3000.0;
+                    float x=(float)ArtMotion.tableX(phase,ball),y=(float)ArtMotion.tableY(phase,ball);
+                    if(i==0)path.moveTo((x+1)*scale,(y+1)*scale);else path.lineTo((x+1)*scale,(y+1)*scale);
+                }
+                paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(sandSize*.0032f);paint.setColor(0xFF796A51);sandCanvas.drawPath(path,paint);
+                sandCanvas.save();sandCanvas.translate(-.6f,-.6f);paint.setStrokeWidth(sandSize*.0012f);paint.setColor(0xFFE6D0AA);sandCanvas.drawPath(path,paint);sandCanvas.restore();
+                penX[ball]=(float)motion.sandX(ball);penY[ball]=(float)motion.sandY(ball);
             }
-            penX=(float)motion.sandX();penY=(float)motion.sandY();sandAge=0;lastSandTime=motion.time;
+            paint.setStyle(Paint.Style.FILL);sandAge=0;lastSandTime=motion.time;
         }
         sandAge+=Math.min(.08,Math.max(0,dt));
-        float x=(float)motion.sandX(),y=(float)motion.sandY();
-        // Update only 15 times/s, retaining physical grooves between frames.
         if(motion.time-lastSandTime>=1.0/15){
-            if(sandAge>1200){ // Gradually rake the old drawing away; never a sudden reset.
-                paint.setColor(0x04B6A384);sandCanvas.drawRect(0,0,sandSize,sandSize,paint);
-                if(sandAge>1220)sandAge=0;
+            if(sandAge>1200){paint.setColor(0x04B6A384);sandCanvas.drawRect(0,0,sandSize,sandSize,paint);if(sandAge>1220)sandAge=0;}
+            for(int ball=0;ball<4;ball++){
+                float x=(float)motion.sandX(ball),y=(float)motion.sandY(ball);
+                groove(penX[ball],penY[ball],x,y);penX[ball]=x;penY[ball]=y;
             }
-            groove(penX,penY,x,y);
-            penX=x;penY=y;lastSandTime=motion.time;
+            lastSandTime=motion.time;
         }
         c.save();path.reset();path.addCircle(0,0,.94f,Path.Direction.CW);c.clipPath(path);
         paint.setColor(Color.WHITE);rect.set(-1,-1,1,1);c.drawBitmap(sand,null,rect,paint);c.restore();
-        paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(.012f);paint.setColor(0xFF38342D);c.drawCircle(0,0,.946f,paint);paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0x60403827);c.drawCircle(x+.009f,y+.012f,.025f,paint);
-        paint.setColor(Color.WHITE);paint.setShader(silver.at(x-.007f,y-.007f,.037f));c.drawCircle(x,y,.021f,paint);paint.setShader(null);
+        paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(.014f);paint.setColor(0xFF38342D);c.drawCircle(0,0,.946f,paint);paint.setStyle(Paint.Style.FILL);
+        for(int ball=0;ball<4;ball++){
+            float x=(float)motion.sandX(ball),y=(float)motion.sandY(ball);
+            paint.setColor(0x60403827);c.drawCircle(x+.008f,y+.010f,.021f,paint);
+            paint.setColor(Color.WHITE);paint.setShader(silver.at(x-.006f,y-.006f,.032f));c.drawCircle(x,y,.018f,paint);paint.setShader(null);
+            paint.setColor(0xEFFFFFFF);c.drawCircle(x-.006f,y-.006f,.003f,paint);
+        }
     }
     private void groove(float x0,float y0,float x1,float y1){
         float scale=sandSize*.5f;
         paint.setStrokeCap(Paint.Cap.ROUND);
-        paint.setStrokeWidth(sandSize*.007f);paint.setColor(0xFF7C6D54);
+        paint.setStrokeWidth(sandSize*.0032f);paint.setColor(0xFF7C6D54);
         sandCanvas.drawLine((x0+1)*scale,(y0+1)*scale,(x1+1)*scale,(y1+1)*scale,paint);
-        paint.setStrokeWidth(sandSize*.0022f);paint.setColor(0xFFE1CCA5);
+        paint.setStrokeWidth(sandSize*.0012f);paint.setColor(0xFFE1CCA5);
         sandCanvas.drawLine((x0+1)*scale-1,(y0+1)*scale-1,(x1+1)*scale-1,(y1+1)*scale-1,paint);
     }
     private void party(Canvas c){
@@ -253,5 +284,11 @@ final class ArtRenderer {
             }
         }
         paint.setStyle(Paint.Style.FILL);
+        for(int i=0;i<32+detail*12;i++){
+            double angle=i*2.39996+time*(.06+.012*(i%3)),radius=.25+.70*VinylMaterial.hash(i,42);
+            float x=(float)(Math.cos(angle)*radius),y=(float)(Math.sin(angle)*radius);
+            float size=.002f+.004f*motion.high+.002f*motion.beat;
+            paint.setColor(color(190+i*9+time*4,.35,.9,140));c.drawCircle(x,y,size,paint);
+        }
     }
 }

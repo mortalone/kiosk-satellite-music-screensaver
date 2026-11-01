@@ -1,3 +1,12 @@
+# 0.1.32
+
+- Reworked backlit materials: Splatter and Colour Sectors now have individual glass-like chips and bevels. Animated mesh deformation and travelling local illumination affect the material itself across all six styles; the centre label stays still. Decorative motion continues independently of beats, while Music mode adds the existing synchronized audio response.
+- Rebuilt Bloom with broad ruffled 3D petal surfaces, surface-normal lighting, radial veins and a detailed seed centre. Petals open, curl and ripple continuously; bass and beat add bounded movement.
+- Sand Table now has four metallic balls drawing interwoven fine rosettes into retained sand. The fastest pen limits progression to avoid speed spikes at tight turns. Detail resolutions are 384/768/1024/1280.
+- Silk and Aurora have denser meshes and flowing fine threads; Coral has moving branch curvature; Prism Party adds drifting coloured motes.
+- Vinyl animation uses monotonic wall time so track seeks do not reset the artwork. Cached textures and reusable mesh buffers are retained. No additional settings or HA helpers.
+- Verified full-source Android API compilation, bounded multi-ball motion, finite changing petal geometry, material detail, and existing overlay lifecycle tests. Inspected software-rendered compositions at different times. The Java2D preview approximates Android shading; actual device frame rate and final display appearance have not been measured.
+
 # 0.1.31
 
 - Seven live procedural scenes: Bloom (folded flower), Silk, Chrome, Aurora, Coral, Sand Table and Prism Party. Available in both plugin Visualisering and the existing HA select; still 20 settings and 11 commands.

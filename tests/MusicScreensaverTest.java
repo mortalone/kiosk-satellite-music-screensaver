@@ -12,24 +12,42 @@ public final class MusicScreensaverTest {
         check(calm.bass<.001 && calm.beat<.001,"Paused music relaxes artwork");
         calm.step(Float.NaN,Float.NaN,Float.POSITIVE_INFINITY,-2,Float.NaN,true);
         check(Float.isFinite(calm.bass)&&Double.isFinite(calm.time),"Bad audio cannot corrupt art geometry");
-        double prevX=calm.sandX(),prevY=calm.sandY();
-        for(int i=0;i<100000;i++){
-            calm.stepSand(.04f);
-            double x=calm.sandX(),y=calm.sandY();
-            check(Math.hypot(x,y)<=.761,"Sand ball stays inside tray");
-            check(Math.hypot(x-prevX,y-prevY)<.004,"Sand ball moves continuously without teleports");
-            prevX=x;prevY=y;
+        for(int ball=0;ball<4;ball++){
+            double prevX=calm.sandX(ball),prevY=calm.sandY(ball);
+            for(int i=0;i<25000;i++){
+                calm.stepSand(.04f);
+                double x=calm.sandX(ball),y=calm.sandY(ball);
+                check(Math.hypot(x,y)<=.806,"All four sand balls stay inside tray");
+                check(Math.hypot(x-prevX,y-prevY)<.008,"Sand balls move continuously without teleports");
+                prevX=x;prevY=y;
+            }
         }
+        float[] petal=new float[3],later=new float[3];
+        double movement=0;
+        for(int layer=0;layer<3;layer++)for(int u=0;u<=40;u++)for(int v=0;v<=80;v++){
+            BloomSurface.point(u/40.0,v/40.0-1,layer,0,8,0,0,0,petal);
+            BloomSurface.point(u/40.0,v/40.0-1,layer,0,8,8,1,1,later);
+            for(int k=0;k<3;k++){
+                check(Float.isFinite(petal[k])&&Float.isFinite(later[k]),"Finite petals at all quality levels");
+                check(Math.abs(petal[k])<1.3&&Math.abs(later[k])<1.3,"Petals stay in artwork stage");
+                movement+=Math.abs(petal[k]-later[k]);
+            }
+        }
+        check(movement>100,"Petal surface changes shape, not just background colour");
 
         String[] designs={"Backlit Splatter","Backlit Mosaic","Backlit Sunburst",
                 "Backlit Marble","Backlit Colour Sectors","Backlit Translucent"};
         java.util.Set<Long> fingerprints=new java.util.HashSet<Long>();
         for(String design:designs){
             long fingerprint=1;int transparent=0,opaque=0;
+            java.util.Set<Integer> glassColors=new java.util.HashSet<Integer>();
+            check(VinylMaterial.glassPixel(design,1.01,0)==0,"Glass stays within disc");
             check(VinylMaterial.pixel(design,1.01,0)==0,"Transparent outside disc");
             for(int y=0;y<64;y++)for(int x=0;x<64;x++){
                 double xx=(x-31.5)/32,yy=(y-31.5)/32;
                 int pixel=VinylMaterial.pixel(design,xx,yy);
+                int glass=VinylMaterial.glassPixel(design,xx,yy);
+                if(Math.hypot(xx,yy)<.95){check((glass>>>24)==255,"Optical material has no transparent mesh holes");glassColors.add(glass);}
                 check(pixel==VinylMaterial.pixel(design,xx,yy),"Stationary deterministic pigment");
                 if(Math.hypot(xx,yy)<.95){
                     int alpha=pixel>>>24;
@@ -38,6 +56,7 @@ public final class MusicScreensaverTest {
                 }
                 fingerprint=fingerprint*31+pixel;
             }
+            check(glassColors.size()>300,"Every material has local colour detail");
             check(transparent>50,"Light can pass through each design");
             if(design.equals("Backlit Splatter")||design.equals("Backlit Mosaic"))
                 check(opaque>50,"Pigment preserves dark contrast");

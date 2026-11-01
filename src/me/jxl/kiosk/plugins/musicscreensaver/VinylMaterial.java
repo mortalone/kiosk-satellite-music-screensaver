@@ -65,4 +65,54 @@ final class VinylMaterial {
         int alpha=(int)(18+226*density);
         return (alpha<<24)|tint;
     }
+    /** Opaque optical texture: dark pigment, luminous chips and bevelled cell edges. */
+    static int glassPixel(String pattern,double x,double y){
+        double radius=Math.hypot(x,y);if(radius>1)return 0;
+        double warp=noise(x*6+15,y*6+19);
+        double u=x*30+1.6*warp,v=y*30+1.6*noise(x*7-9,y*7+4);
+        int ix=(int)Math.floor(u),iy=(int)Math.floor(v);
+        double first=100,second=100,seed=0,dx0=0,dy0=0;
+        for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){
+            double dx=ix+i+.1+.8*hash(ix+i,iy+j)-u;
+            double dy=iy+j+.1+.8*hash(iy+j+81,ix+i+23)-v;
+            double d=dx*dx+dy*dy;
+            if(d<first){second=first;first=d;dx0=dx;dy0=dy;seed=hash(ix+i+147,iy+j+91);}
+            else if(d<second)second=d;
+        }
+        double edge=Math.sqrt(second)-Math.sqrt(first);
+        double facet=.67+.33*smooth(.01,.14,edge);
+        double ridge=Math.exp(-Math.pow((edge-.08)/.035,2))*.20;
+        int pigment=pixel(pattern,x,y);
+        double density=(pigment>>>24)/255.;
+        double transmission=1-density;
+        double red=1,green=.94,blue=.86;
+        if("Backlit Splatter".equals(pattern)){
+            // Chip clusters of varying sizes, instead of one continuous camouflage mask.
+            double cluster=noise(x*10+4,y*10-3);
+            transmission=seed<.18+cluster*.24?.06:.70+.30*seed;
+            transmission*=.75+.25*smooth(.015,.10,edge);
+            red=.85+.15*seed;green=.88+.12*(1-seed);blue=.85+.15*warp;
+        }else if("Backlit Mosaic".equals(pattern)){
+            transmission=.65+.35*seed;
+            red=seed>.58?1:.45;green=seed>.58?.88:.95;blue=seed>.58?.36:1;
+            transmission*=.45+.55*smooth(.015,.10,edge);
+        }else if("Backlit Colour Sectors".equals(pattern)){
+            double sector=Math.sin(Math.atan2(y,x)*2+warp*.8);
+            red=sector>0?1:.45;green=sector>0?.49:1;blue=sector>0?.81:.92;
+            transmission=seed<.15?.09:.62+.38*seed;
+        }else if("Backlit Translucent".equals(pattern)){
+            transmission=.70+.25*warp;facet=.94+.06*facet;ridge*=.1;
+        }else{
+            transmission=.10+.90*transmission;
+            transmission*=.7+.3*seed;
+        }
+        double ring=.40+.60*Math.exp(-Math.pow((radius-.48)/.40,2));
+        double relief=facet+ridge+.13*(dx0-dy0);
+        double luminance=clamp(transmission*relief*ring);
+        int rr=(int)(12+243*clamp(luminance*red));
+        int gg=(int)(13+242*clamp(luminance*green));
+        int bb=(int)(19+236*clamp(luminance*blue));
+        return 0xff000000|(rr<<16)|(gg<<8)|bb;
+    }
+
 }
